@@ -14,7 +14,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import itertools
 import tensorflow.contrib.distributions as tfd
-from noisy_channels import *
 from tensorflow.contrib.distributions import Bernoulli, Categorical, RelaxedBernoulli, Normal
 import pickle
 from itertools import product, chain
@@ -347,21 +346,18 @@ class NECST():
 					# start deconvolution process
 					deconv1 = tf.layers.conv2d(d, 16, (3,3), padding="SAME", activation=None, 
 						reuse=reuse, name='deconv1')
-					# print('deconv1 shape: {}'.format(deconv1.get_shape()))
 					bn1 = tf.layers.batch_normalization(deconv1)
 					relu1 = tf.nn.relu(bn1)
 					deconv1_out = tf.keras.layers.UpSampling2D((2,2))(relu1)
 					# 2nd deconvolutional layer
 					deconv2 = tf.layers.conv2d(deconv1_out, 32, (3,3), padding="SAME", activation=None, 
 						reuse=reuse, name='deconv2')
-					# print('deconv2 shape: {}'.format(deconv2.get_shape()))
 					bn2 = tf.layers.batch_normalization(deconv2)
 					relu2 = tf.nn.relu(bn2)
 					deconv2_out = tf.keras.layers.UpSampling2D((2,2))(relu2)
 					# 3rd convolutional layer
 					deconv3 = tf.layers.conv2d(deconv2_out, 64, (3,3), padding="SAME", activation=None, 
 						reuse=reuse, name='deconv3')
-					# print('deconv3 shape: {}'.format(deconv3.get_shape()))
 					bn3 = tf.layers.batch_normalization(deconv3)
 					relu3 = tf.nn.relu(bn3)
 					out = tf.keras.layers.UpSampling2D((2,2))(relu3)
@@ -369,46 +365,37 @@ class NECST():
 					deconv3_out = tf.layers.batch_normalization(deconv3_out)
 
 					deconv3_out = tf.nn.sigmoid(deconv3_out)
-					# print('deconv3 shape: {}'.format(deconv3_out.get_shape()))
 					return deconv3_out
 				else:
 					# train
 					for i in range(self.vimco_samples):
-						# print('in vimco samples part of deconvolution!')
 						# iterate through one vimco sample at a time
 						z_sample = z[i]
-						# print('z_sample shape: {}'.format(z_sample.get_shape()))
 						# reshape input properly for deconvolution
 						d = tf.layers.dense(z_sample, 4*4*16, activation=None, use_bias=False, reuse=reuse, name='fc1')	
 						d = tf.reshape(d, (-1, 4, 4, 16))
 						# start deconvolution process
 						deconv1 = tf.layers.conv2d(d, 16, (3,3), padding="SAME", activation=None, reuse=reuse, name='deconv1')
-						# print('deconv1 shape: {}'.format(deconv1.get_shape()))
 						bn1 = tf.layers.batch_normalization(deconv1)
 						relu1 = tf.nn.relu(bn1)
 						deconv1_out = tf.keras.layers.UpSampling2D((2,2))(relu1)
 						# 2nd deconvolutional layer
 						deconv2 = tf.layers.conv2d(deconv1_out, 32, (3,3), padding="SAME", activation=None, 
 							reuse=reuse, name='deconv2')
-						# print('deconv2 shape: {}'.format(deconv2.get_shape()))
 						bn2 = tf.layers.batch_normalization(deconv2)
 						relu2 = tf.nn.relu(bn2)
 						deconv2_out = tf.keras.layers.UpSampling2D((2,2))(relu2)
 						# 3rd convolutional layer
 						deconv3 = tf.layers.conv2d(deconv2_out, 64, (3,3), padding="SAME", activation=None, 
 							reuse=reuse, name='deconv3')
-						# print('deconv3 shape: {}'.format(deconv3.get_shape()))
 						bn3 = tf.layers.batch_normalization(deconv3)
 						relu3 = tf.nn.relu(bn3)
 						out = tf.keras.layers.UpSampling2D((2,2))(relu3)
-						# print('out shape: {}'.format(out.get_shape()))
 						deconv3_out = tf.layers.conv2d(out, 3, (3, 3), padding="SAME", activation=None)
 						deconv3_out = tf.layers.batch_normalization(deconv3_out)
 						deconv3_out = tf.nn.sigmoid(deconv3_out)
-						# print('deconv3_out shape: {}'.format(deconv3_out.get_shape()))
 						samples.append(deconv3_out)
 		x_reconstr_logits = tf.stack(samples, axis=0)
-		print(x_reconstr_logits.get_shape())
 		return x_reconstr_logits
 
 
@@ -427,15 +414,10 @@ class NECST():
 				if len(z.get_shape().as_list()) == 2:
 					# test
 					d = tf.layers.dense(z, 4*4*32, activation=tf.nn.elu, use_bias=False, reuse=reuse, name='fc1')	
-					print('init d shape: {}'.format(d.get_shape()))	
 					d = tf.reshape(d, (-1, 4, 4, 32))
-					print('d shape: {}'.format(d.get_shape()))
 					deconv1 = tf.layers.conv2d_transpose(d, 32, 1, strides=(2,2), padding="SAME", activation=tf.nn.elu, reuse=reuse, name='deconv1')
-					print('deconv1 shape: {}'.format(deconv1.get_shape()))
 					deconv2 = tf.layers.conv2d_transpose(deconv1, 32, 5, strides=(2,2), padding="SAME", activation=tf.nn.elu, reuse=reuse, name='deconv2')
-					print('deconv2 shape: {}'.format(deconv2.get_shape()))
 					deconv3 = tf.layers.conv2d_transpose(deconv2, 1, 5, strides=(2,2), padding="SAME", activation=tf.nn.sigmoid, reuse=reuse, name='deconv3')
-					print('deconv3 shape: {}'.format(deconv3.get_shape()))
 					return deconv3
 				else:
 					# train
@@ -444,13 +426,9 @@ class NECST():
 						z_sample = z[i]
 						d = tf.layers.dense(z, 4*4*32, activation=tf.nn.elu, use_bias=False, reuse=reuse, name='fc1')	
 						d = tf.reshape(d, (-1, 4, 4, 32))
-						print('d shape: {}'.format(d.get_shape()))
 						deconv1 = tf.layers.conv2d_transpose(d, 32, 1, strides=(2,2), padding="SAME", activation=tf.nn.elu, reuse=reuse, name='deconv1')
-						print('deconv1 shape: {}'.format(deconv1.get_shape()))
 						deconv2 = tf.layers.conv2d_transpose(deconv1, 32, 5, strides=(2,2), padding="SAME", activation=tf.nn.elu, reuse=reuse, name='deconv2')
-						print('deconv2 shape: {}'.format(deconv2.get_shape()))
 						deconv3 = tf.layers.conv2d_transpose(deconv2, 1, 5, strides=(2,2), padding="SAME", activation=tf.nn.sigmoid, reuse=reuse, name='deconv3')
-						print('deconv3 shape: {}'.format(deconv3.get_shape()))
 						samples.append(deconv3)
 		x_reconstr_logits = tf.stack(samples, axis=0)
 		print(x_reconstr_logits.get_shape())
@@ -541,7 +519,7 @@ class NECST():
 	    log_q_h: Sum of log q(h^l) over layers
 	    Returns:
 	    baseline to subtract from l
-	    ---> jaan's implementation
+	    ---> implementation from: https://github.com/altosaar/vimco_tf
 	    """
 	    # compute the multi-sample stochastic bound
 	    k, b = l.get_shape().as_list()
@@ -583,9 +561,6 @@ class NECST():
 		if self.img_dim == 64:
 			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
 		elif self.img_dim == 32 and self.datasource.target_dataset == 'cifar10':
-			# reconstr_loss = tf.reduce_sum(
-			# 	tf.nn.sigmoid_cross_entropy_with_logits(labels=x, logits=x_reconstr_logits[0]))
-			# TODO: ask if this should be gaussian or sigmoid cross entropy!!!!
 			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
 		elif self.img_dim == 32 and self.datasource.target_dataset == 'svhn':
 			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
@@ -607,20 +582,15 @@ class NECST():
 
 		# get appropriate losses for theta and phi respectively
 		self.local_l = local_l
-		# TODO: check if this should be elbo or reconstr_loss
 		theta_loss = (w * reconstr_loss) # shapes are both (5, batch_size)
 		phi_loss = (local_l * log_q_h) + theta_loss
 
 		# first sum over each sample, then average over minibatch
 		theta_loss = tf.reduce_mean(tf.reduce_sum(theta_loss, axis=0))
 		phi_loss = tf.reduce_mean(tf.reduce_sum(phi_loss, axis=0)) + reg_loss
-		# phi_loss = tf.reduce_mean(tf.reduce_sum(phi_loss, axis=0))
 		full_loss = tf.reduce_mean(full_loss)
 
-		# total_loss = reg_loss + full_loss
 		tf.summary.scalar('vimco (no gradient reduction) loss', full_loss)
-
-		# TODO
 		return theta_loss, phi_loss, full_loss
 
 
@@ -637,11 +607,9 @@ class NECST():
 			reconstr_loss = tf.reduce_mean(
 				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
 
-		# return tf.reduce_mean(loss)
 		return reconstr_loss
 
 
-	# TODO: stefano's suggestion
 	def create_collapsed_computation_graph(self, x, std=0.1, reuse=False):
 		"""
 		this models both (Y_i|X) and N as Bernoullis,
@@ -672,14 +640,7 @@ class NECST():
 		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
 		if self.perturb_probs != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			if self.n_sigbits > 0:
-				print('setting first {} bits to be noise-free!'.format(self.n_sigbits))
-				adjusted = np.ones((FLAGS.batch_size, self.z_dim)) * self.perturb_probs
-				adjusted[:, 0:self.n_sigbits] = 1e-6
-				adjusted_tensor = tf.constant(adjusted, dtype=tf.float32)
-				total_prob = y_hat_prob - (2 * y_hat_prob * adjusted_tensor) + adjusted_tensor
-			else:
-				total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
@@ -785,104 +746,18 @@ class NECST():
 		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
 		if self.perturb_probs != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			if self.n_sigbits > 0:
-				print('setting first {} bits to be noise-free!'.format(self.n_sigbits))
-				adjusted = np.ones((FLAGS.batch_size, self.z_dim)) * self.perturb_probs
-				adjusted[:, 0:self.n_sigbits] = 1e-6
-				adjusted_tensor = tf.constant(adjusted, dtype=tf.float32)
-				total_prob = y_hat_prob - (2 * y_hat_prob * adjusted_tensor) + adjusted_tensor
-			else:
-				total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
 			q = Bernoulli(logits=mean)
 
-		# use VIMCO if self.vimco_samples > 1, else just one sample
 		y = tf.cast(q.sample(self.vimco_samples), tf.float32)
-		# y = tf.cast(q.sample(), tf.float32)
-		print('y shape: {}'.format(y.get_shape()))
-
 		x_reconstr_logits = self.complex_decoder(y, reuse=reuse)
-		print('x reconstr logits shape: {}'.format(x_reconstr_logits.get_shape()))
 
 		return mean, y, classif_y, q, x_reconstr_logits
 
 
-	def create_stochastic_computation_graph(self, x, std=0.1, reuse=False):
-		"""
-		computation graph designed to work with gumbel-softmax
-		"""
-		mean = self.encoder(x, reuse=reuse)
-
-		if self.discrete_relax:
-			# gumbel-softmax
-			raise NotImplementedError
-		else:
-			print('creating stochastic computation graph')
-			# TODO: this Bernoulli should be deterministic!!!
-			q = Bernoulli(logits=mean)
-			# VIMCO 
-			if self.vimco_samples > 1:
-				print('using VIMCO')
-				y_hat = tf.cast(q.sample(self.vimco_samples), tf.float32)
-				if self.perturb_probs != 0.:
-					print('TRAIN: flipping individual bits with probability {}'.format(self.perturb_probs))
-					# error drawn from independent Bernoullis
-					err_prob = tf.ones_like(mean) * self.perturb_probs
-					# TODO: will you have to save self.N???
-					N = tf.cast(Bernoulli(probs=err_prob).sample(self.vimco_samples), tf.float32)
-
-					# add in the channel noise
-					mod_op = tf.ones_like(y_hat) * 2.
-					y = tf.mod(y_hat + N, mod_op)
-				else:
-					# if no channel noise, just feed in y_hat
-					y = y_hat
-			else:
-				print('sampling one discrete value')
-				# TODO: this Bernoulli should be deterministic!!!
-				q = Bernoulli(logits=mean)
-				y_hat = tf.cast(q.sample(), tf.float32)
-				if self.perturb_probs != 0.:
-					print('TRAIN: flipping individual bits with probability {}'.format(self.perturb_probs))
-					err_prob = tf.ones_like(mean) * self.perturb_probs
-					# TODO: will you have to save self.N???
-					N = tf.cast(Bernoulli(probs=err_prob).sample(), tf.float32)
-					# add in the channel noise
-					mod_op = tf.ones_like(y_hat) * 2.
-					y = tf.mod(y_hat + N, mod_op)
-				else:
-					# if no channel noise, just feed in y_hat
-					y = y_hat
-
-		x_reconstr_logits = self.decoder(y, reuse=reuse)
-
-		return mean, y, q, x_reconstr_logits
-
-
-	def get_test_sample(self, x, std=0.1, reuse=False):
-
-		soft_bits = self.deterministic_encoder(x, reuse=tf.AUTO_REUSE)
-		if not self.sigmoid:
-			z = tf.round(soft_bits)
-		else:
-			# really high number for now
-			z = tf.nn.sigmoid(100. * soft_bits)
-
-		# TODO: channel noise
-		if self.perturb_probs != 0.:
-			print('TEST: flipping individual bits with probability {}'.format(self.perturb_probs))
-			err_prob = tf.ones_like(soft_bits) * self.perturb_probs
-			N = tf.cast(Bernoulli(probs=err_prob).sample(), tf.float32)
-			mod_op = tf.ones_like(soft_bits) * 2.
-			z = tf.mod(z + N, mod_op)
-		x_reconstr_logits = self.decoder(z, reuse=tf.AUTO_REUSE)
-
-		return soft_bits, z, x_reconstr_logits
-
-
-	# TODO: stefano's suggestion
 	def get_collapsed_stochastic_test_sample(self, x, std=0.1, reuse=False):
 		"""
 		use collapsed Bernoulli at test time as well
@@ -911,14 +786,7 @@ class NECST():
 		# test BSC
 		if self.perturb_probs != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			if self.n_sigbits > 0:
-				print('setting first {} bits to be noise-free!'.format(self.n_sigbits))
-				adjusted = np.ones((FLAGS.batch_size, self.z_dim)) * self.test_perturb_probs
-				adjusted[:, 0:self.n_sigbits] = 1e-6
-				adjusted_tensor = tf.constant(adjusted, dtype=tf.float32)
-				total_prob = y_hat_prob - (2 * y_hat_prob * adjusted_tensor) + adjusted_tensor
-			else:
-				total_prob = y_hat_prob - (2 * y_hat_prob * self.test_perturb_probs) + self.test_perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.test_perturb_probs) + self.test_perturb_probs
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
@@ -944,7 +812,6 @@ class NECST():
 		return total_prob, y, classif_y, q, x_reconstr_logits
 
 
-	# TODO: stefano's suggestion
 	def get_collapsed_erasure_stochastic_test_sample(self, x, std=0.1, reuse=False):
 		"""
 		use collapsed Bernoulli at test time as well
@@ -1008,29 +875,6 @@ class NECST():
 
 		return total_prob, y, q, x_reconstr_logits
 		# return total_prob, y, classif_y, q, x_reconstr_logits
-
-
-	def get_stochastic_test_sample(self, x, std=0.1, reuse=False):
-		# TODO: will have to adjust this as well!
-
-		mean = self.encoder(x, reuse=tf.AUTO_REUSE)
-		if self.discrete_relax:
-			# gumbel-softmax
-			q = RelaxedBernoulli(temperature=self.adj_temp, logits=mean)
-			z = q.sample()
-		else:
-			print('creating stochastic test computation graph')
-			q = Bernoulli(logits=mean)
-			z = tf.cast(q.sample(), tf.float32)
-
-		# TODO: channel noise
-		if self.perturb_probs != 0.:
-			print('TEST: flipping individual bits with probability {}'.format(self.perturb_probs))
-			# z = random_bit_flip(z, FLAGS.batch_size, self.perturb_probs)
-			z = zero_one_random_bit_flip(z, FLAGS.batch_size, self.perturb_probs)
-		x_reconstr_logits = self.decoder(z, reuse=tf.AUTO_REUSE)
-
-		return mean, z, x_reconstr_logits
 
 
 	def train(self, ckpt=None, verbose=True):
@@ -1120,10 +964,10 @@ class NECST():
 				except tf.errors.OutOfRangeError:
 					break
 			# end of training epoch; adjust temperature here if using Gumbel-Softmax
-			if self.discrete_relax:
-				if (counter % 1000 == 0) and (counter > 0):
-					self.adj_temp = np.maximum(self.tau * np.exp(-self.anneal_rate * counter), self.min_temp)
-					print('adjusted temperature to: {}'.format(self.adj_temp))
+			# if self.discrete_relax:
+			# 	if (counter % 1000 == 0) and (counter > 0):
+			# 		self.adj_temp = np.maximum(self.tau * np.exp(-self.anneal_rate * counter), self.min_temp)
+			# 		print('adjusted temperature to: {}'.format(self.adj_temp))
 			# enter validation phase
 			if verbose:
 				epoch_train_loss /= num_batches
@@ -1221,8 +1065,6 @@ class NECST():
 
 	def reconstruct(self, ckpt=None, pkl_file=None):
 
-		import pickle
-
 		sess = self.sess
 		datasource = self.datasource
 
@@ -1268,10 +1110,6 @@ class NECST():
 			x = np.reshape(x, (-1, self.input_dim))
 			plot(np.vstack((
 				x[0:10], x_reconstr_logits[0:10])), m=10, n=2, px=32, title='reconstructions')
-		elif self.input_dim == 7840 or self.input_dim == 3920:
-			x = np.reshape(x, (-1, self.input_dim))
-			plot_stitched_mnist(np.vstack((
-				x[0:10], x_reconstr_logits[0:10])), m=10, n=20, title='reconstructions')
 		else:
 			# TODO: edited this
 			plot(np.vstack((
@@ -1331,9 +1169,6 @@ class NECST():
 
 		samples = np.vstack(samples)
 		print(samples.shape)
-		if self.input_dim != 7840:
-			plot(samples, m=10, n=10, title='markov_chain_samples')
-		else:
-			plot_stitched_mnist(samples, m=10, n=100, title='markov_chain_samples')
+		plot(samples, m=10, n=10, title='markov_chain_samples')
 
 		return samples

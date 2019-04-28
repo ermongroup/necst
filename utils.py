@@ -142,34 +142,6 @@ def plot(samples, m=4, n=None, px=28, title=None):
 	return fig
 
 
-def plot_stitched_mnist(samples, m=4, n=None, px=28, title=None):
-	"""
-	Plots samples.
-		n: Number of rows and columns; n^2 samples
-		px: Pixels per side for each sample
-	"""
-	if n is None:
-		n = m
-	fig = plt.figure(figsize=(m, n))
-	gs = gridspec.GridSpec(n, m)
-	print('n: {}, m: {}'.format(n, m))
-	gs.update(wspace=0.05, hspace=0.05)
-	all_samples = samples.reshape((-1, 28, 28))
-	for i, sample in enumerate(all_samples):
-		ax = plt.subplot(gs[i])
-		plt.axis('off')
-		ax.set_xticklabels([])
-		ax.set_yticklabels([])
-		ax.set_aspect('equal')
-		plt.imshow(sample.reshape(px, px), cmap='Greys')
-	if title is None:
-		title = 'samples'
-	fig.savefig(os.path.join(FLAGS.outdir, title))
-	# fig.show()
-	plt.close()
-	return fig
-
-
 def get_activation_fn(activation):
 	"""
 	Returns the specified tensorflow activation function.
