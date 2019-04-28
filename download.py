@@ -8,8 +8,6 @@ Downloads the following:
 - MNIST dataset
 """
 # pylint: skip-file
-
-
 import os
 import sys
 import gzip

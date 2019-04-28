@@ -1,3 +1,4 @@
+# NOTE: mostly from aditya-grover's UAE project
 import numpy as np
 from scipy.special import expit
 import inspect
@@ -106,19 +107,6 @@ def provide_data(data, batch_size=10):
 	return data_iterator(), X_mean, X_std, y_mean, y_std
 
 
-# def fc(x, weights_shape, bias_shape, 
-#     weights_initializer=tf.contrib.layers.xavier_initializer(),
-#     bias_initializer=tf.constant_initializer()):
-#     """
-#     Creates a fully connected neural net layer.
-#     """
-#     weights = tf.get_variable('weights',  weights_shape, 
-#        initializer=weights_initializer)
-#     biases = tf.get_variable('biases', bias_shape,
-#         initializer=bias_initializer)
-#     return tf.nn.xw_plus_b(x, weights, biases)
-
-
 def plot(samples, m=4, n=None, px=28, title=None):
 	"""
 	Plots samples.
@@ -210,6 +198,3 @@ def get_optimizer_fn(optimizer):
 		return tf.train.RMSPropOptimizer
 	else:
 		return tf.train.AdamOptimizer # default
-
-
-

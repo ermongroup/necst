@@ -1,5 +1,7 @@
-
-""" Code for loading data. """
+"""
+Code for loading data. 
+lifted mostly from aditya-grover's UAE project
+"""
 import numpy as np
 import random
 import tensorflow as tf
@@ -22,7 +24,6 @@ class Datasource(object):
 		self.batch_size = FLAGS.batch_size
 
 		# minor changes
-		# TODO
 		if FLAGS.datasource == 'mnist' or FLAGS.datasource == 'omniglot2mnist':
 
 			self.target_dataset = 'mnist'
@@ -270,10 +271,6 @@ class Datasource(object):
 			import skimage.io as io
 			io.imshow(reconstructed_img)
 			io.show()
-			# import matplotlib.pyplot as plt
-			# plt.show(reconstructed_img)
-			# plt.savefig('./results/blah.png')
-			# plt.close()
 			if img_id == 5:
 				exit()		
 
@@ -338,6 +335,3 @@ class Datasource(object):
 			else self.VALID_FILE if split=='valid' else self.TEST_FILE)
 		tf_dataset = tf.data.TFRecordDataset(filename)
 		return tf_dataset.map(_parse_function)
-
-
-

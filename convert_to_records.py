@@ -1,23 +1,4 @@
-# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-
-"""Converts MNIST data to TFRecords file format with Example protos."""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+# lifted mostly from aditya-grover's UAE project
 import argparse
 import numpy as np
 import os
@@ -36,7 +17,7 @@ def _int64_feature(value):
   # TODO: for celebA, had to change value=[value] to value=value
   # for mnist, you may have to change this back to normal
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-  # return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+  # return tf.train.Feature(int64_list=tf.train.Int64List(value=value)
 
 def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -48,7 +29,6 @@ def convert_to(dataset, name):
   # TODO: try this
   # images = images.astype(np.float32)
   # print(images.dtype)
-  
   labels = dataset.labels
   num_examples = images.shape[0]
 
@@ -89,32 +69,6 @@ def convert_stitched_mnist(dataset, name):
         'features': _bytes_feature(image_raw)}))
     writer.write(example.SerializeToString())
   writer.close()
-
-
-# TODO: see if you want to incorporate the second label
-# def convert_omniglot(dataset, name):
-#   """Converts a dataset to tfrecords."""
-#   images = dataset.images  
-#   # images = images.astype(np.float32, copy=False)
-
-#   labels = dataset.labels
-#   num_examples = images.shape[0]
-
-#   if images.shape[0] != num_examples:
-#     raise ValueError('Images size %d does not match label size %d.' %
-#                      (images.shape[0], num_examples))
-
-#   filename = os.path.join(FLAGS.directory, FLAGS.dataset, name + '.tfrecords')
-#   print('Writing', filename)
-#   writer = tf.python_io.TFRecordWriter(filename)
-#   for index in range(num_examples):
-#     image_raw = images[index].tostring()
-#     example = tf.train.Example(features=tf.train.Features(feature={
-#         'label': _int64_feature(labels[index]),
-#         'features': _bytes_feature(image_raw)
-#         }))
-#     writer.write(example.SerializeToString())
-#   writer.close()
 
 
 def convert_binary_mnist(fname, name):
@@ -172,23 +126,6 @@ def main(unused_argv):
     convert_binary_mnist(os.path.join(FLAGS.directory, FLAGS.dataset,'binarized_mnist_train.amat'), 'bin_mnist_train')
     convert_binary_mnist(os.path.join(FLAGS.directory, FLAGS.dataset,'binarized_mnist_valid.amat'), 'bin_mnist_valid')
     convert_binary_mnist(os.path.join(FLAGS.directory, FLAGS.dataset,'binarized_mnist_test.amat'), 'bin_mnist_test')
-  elif FLAGS.dataset == 'stitched_mnist':
-    # assumes existence of .amat files in datasets directory
-    # Convert to Examples and write the result to TFRecords
-    # convert_stitched_mnist(os.path.join(FLAGS.directory, 'BinaryMNIST','binarized_mnist_train.amat'), 'stitched_bin_mnist_train')
-    # convert_stitched_mnist(os.path.join(FLAGS.directory, 'BinaryMNIST','binarized_mnist_valid.amat'), 'stitched_bin_mnist_valid')
-    # convert_stitched_mnist(os.path.join(FLAGS.directory, 'BinaryMNIST','binarized_mnist_test.amat'), 'stitched_bin_mnist_test')
-
-    # this is for continuous grayscale MNIST 
-    datasets = mnist.read_data_sets(FLAGS.directory,
-                                   dtype=tf.uint8,
-                                   reshape=False,
-                                   validation_size=FLAGS.valid_size)
-
-    # Convert to Examples and write the result to TFRecords.
-    convert_stitched_mnist(datasets.train, 'five_stitched_mnist_train')
-    convert_stitched_mnist(datasets.validation, 'five_stitched_mnist_valid')
-    convert_stitched_mnist(datasets.test, 'five_stitched_mnist_test')
   elif FLAGS.dataset == 'random':
     # assumes existence of .npy files in datasets
     convert_random_bits(os.path.join(FLAGS.directory, FLAGS.dataset,'random_bits_train.npy'), 'rand_bits_train')
@@ -230,10 +167,6 @@ def main(unused_argv):
     train_dataset = SimpleNamespace(images= trainimages, labels= trainlabels, labels2= trainlabels2)
     valid_dataset = SimpleNamespace(images= validimages, labels= validlabels, labels2= validlabels2)
     test_dataset = SimpleNamespace(images= testimages, labels= testlabels, labels2= testlabels2)
-
-    # {'images': trainimages, 'labels': trainlabels, 'labels2': trainlabels2}
-    # valid_dataset = {'images': validimages, 'labels': validlabels, 'labels2': validlabels2}
-    # test_dataset = {'images': testimages, 'labels': testlabels, 'labels2': testlabels2}
 
     convert_to(train_dataset, 'omniglot_train')
     convert_to(valid_dataset, 'omniglot_valid')
@@ -287,9 +220,7 @@ def main(unused_argv):
     convert_to(test_dataset, 'svhn_test')
   elif FLAGS.dataset == 'celebA':
     import h5py
-    # file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'celeba_converted.hdf5')
     file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'REAL_gender_celeba_aligned_cropped.hdf5')
-    # file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'REAL_celeba_aligned_cropped.hdf5')
     if not os.path.exists(file_path):
       raise ValueError('need: ', file_path)
     f = h5py.File(file_path, 'r')
@@ -311,9 +242,6 @@ def main(unused_argv):
     train_dataset = SimpleNamespace(images= trainimages, labels= trainlabels)
     valid_dataset = SimpleNamespace(images= validimages, labels= validlabels)
     test_dataset = SimpleNamespace(images= testimages, labels= testlabels)
-    # train_dataset = SimpleNamespace(images= trainimages)
-    # valid_dataset = SimpleNamespace(images= validimages)
-    # test_dataset = SimpleNamespace(images= testimages)
 
     convert_to(train_dataset, 'gender_celebA_train')
     convert_to(valid_dataset, 'gender_celebA_valid')

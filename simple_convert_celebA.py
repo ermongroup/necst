@@ -1,5 +1,4 @@
 # TODO: automatically crops and aligns image to be size 64 x 64
-
 import os
 import h5py
 import numpy as np
