@@ -1,3 +1,4 @@
+# NOTE: most of code from aditya-grover's UAE project (TODO: find link)
 from utils import *
 import tensorflow as tf 
 import numpy as np
@@ -22,9 +23,7 @@ from tensorflow.python.platform import flags
 FLAGS = flags.FLAGS
 
 
-class UAE():
-	# uncertainty autoencoder
-
+class NECST():
 	def __init__(self, sess, datasource):
 
 		self.seed = FLAGS.seed
@@ -52,24 +51,14 @@ class UAE():
 
 		self.last_layer_act = tf.nn.sigmoid if FLAGS.non_linear_act else None
 		self.stochastic_discrete_latent = FLAGS.stochastic_discrete_latent
-		self.learn_A = FLAGS.learn_A
 
 		# perturbation experiment
 		self.noisy_mnist = FLAGS.noisy_mnist
-
-		# for gumbel-softmax and annealing
-		self.discrete_relax = FLAGS.discrete_relax
-		self.tau = FLAGS.tau
-		self.adj_temp = self.tau
-		self.anneal_rate = 0.00003
-		self.min_temp = 0.5
-		self.max_temp = 1000.
 		self.channel = 1  # 1 channel for MNIST
 
 		# for vimco
 		self.is_binary = FLAGS.is_binary
 		self.vimco_samples = FLAGS.vimco_samples
-		self.n_sigbits = int(FLAGS.n_sigbits)
 
 		# other params
 		self.activation = FLAGS.activation
@@ -97,7 +86,6 @@ class UAE():
 		# mask
 		self.mask = tf.placeholder_with_default(
 			np.ones((FLAGS.batch_size, self.z_dim, 3)), shape=[None, self.z_dim, 3])
-		# graph ops+variables
 		# TODO: hacky - fix later
 		if self.img_dim == 64:
 			self.x = tf.placeholder(self.datasource.dtype, shape=[None, self.img_dim, self.img_dim, 3], name='vae_input')
