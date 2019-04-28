@@ -1,3 +1,4 @@
+# NOTE: code mostly from aditya-grover's UAE project
 import numpy as np 
 import tensorflow as tf 
 from utils import *
@@ -10,7 +11,7 @@ from tensorflow.python.platform import flags
 FLAGS = flags.FLAGS
 
 # File options
-flags.DEFINE_string('datadir', '../../datasets/', 'directory for datasets')
+flags.DEFINE_string('datadir', '../datasets/', 'directory for datasets')
 flags.DEFINE_string('datasource', 'mnist', 'mnist/BinaryMNIST/random/omniglot/binary_omniglot/celebA/svhn/cifar10')
 flags.DEFINE_string('logdir', './models/', 'directory to save checkpoints, events files')
 flags.DEFINE_string('outdir', './results/', 'directory to save samples, final results')
@@ -27,7 +28,6 @@ flags.DEFINE_bool('dump', True, 'Dumps to log.txt if True')
 flags.DEFINE_bool('is_binary', False, 'True if dataset is binary, false otherwise.')
 flags.DEFINE_integer('vimco_samples', 5, 'number of VIMCO samples to use during training')
 flags.DEFINE_bool('stochastic_discrete_latent', True, 'use REINFORCE-type training to train')
-flags.DEFINE_bool('learn_covariance', False, 'learn covariance of Gaussian decoder')
 
 # Noise specifications
 flags.DEFINE_bool('noisy_mnist', False, 'specify whether to train necst with noisy MNIST')
@@ -138,4 +138,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-

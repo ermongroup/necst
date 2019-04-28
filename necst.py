@@ -80,9 +80,6 @@ class NECST():
 		self.perturb_probs = FLAGS.perturb_probs
 		self.test_perturb_probs = FLAGS.test_perturb_probs
 
-		# control experiment
-		self.vae = FLAGS.vae
-
 		# mask
 		self.mask = tf.placeholder_with_default(
 			np.ones((FLAGS.batch_size, self.z_dim, 3)), shape=[None, self.z_dim, 3])
@@ -97,7 +94,6 @@ class NECST():
 
 		# CS settings
 		self.noise_std = tf.placeholder_with_default(FLAGS.noise_std, shape=(), name='noise_std')
-		self.adj_noise = self.noise_std
 		self.reg_param = tf.placeholder_with_default(FLAGS.reg_param, shape=(), name='reg_param')
 
 		# graph construction, depending on whether you want deterministic or stochastic latents
@@ -156,20 +152,10 @@ class NECST():
 			print('training with noisy MNIST, using true x values for vimco loss...')
 			self.test_loss = self.get_test_loss(self.true_x, self.test_x_reconstr_logits)
 		else:
-			# TODO: you'll have to change this for VAE
 			self.test_loss = self.get_test_loss(self.x, self.test_x_reconstr_logits)
 
 		# session ops
 		self.global_step = tf.Variable(0, name='global_step', trainable=False)
-
-		if self.transfer:
-			train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/decoder')
-		elif self.learn_A:
-			train_vars = tf.trainable_variables()
-		else:
-			A, A_val = self.get_A()
-			self.assign_A_op = tf.assign(A, A_val)
-			train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/decoder')
 
 		# set up optimization op
 		if self.stochastic_discrete_latent:
@@ -256,25 +242,6 @@ class NECST():
 				flattened = tf.reshape(conv5, (-1, 256*1*1))
 				z_mean = tf.layers.dense(flattened, enc_layers[-1], activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-final')
 		return z_mean
-
-
-	def mixture_complex_encoder(self, x, reuse=True):
-		"""
-		more complex encoder architecture for images with more than 1 color channel
-		""" 
-		enc_layers = self.enc_layers
-		regularizer = tf.contrib.layers.l2_regularizer(scale=self.reg_param)
-		with tf.variable_scope('model', reuse=reuse):
-			with tf.variable_scope('encoder', reuse=reuse):
-				conv1 = tf.layers.conv2d(x, 32, 4, strides=(2,2), padding="SAME", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv1')
-				conv2 = tf.layers.conv2d(conv1, 32, 4, strides=(2,2), padding="SAME", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv2')
-				conv3 = tf.layers.conv2d(conv2, 64, 4, strides=(2,2), padding="SAME", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv3')
-				conv4 = tf.layers.conv2d(conv3, 64, 4, strides=(2,2), padding="SAME", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv4')
-				conv5 = tf.layers.conv2d(conv4, 256, 4, padding="VALID", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv5')
-				flattened = tf.reshape(conv5, (-1, 256*1*1))
-				cont_disc_mean = tf.layers.dense(flattened, self.z_dim, activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc')
-
-		return cont_disc_mean
 
 
 	def convolutional_32_encoder(self, x, reuse=True):
@@ -670,40 +637,7 @@ class NECST():
 		# to be able to look at the log probabilities 
 		self.log_q_h = log_q_h
 		self.log_q_h_list = log_q_h_list
-
-		# TODO: feed in the elbo instead of the reconstr_loss into build_vimco_loss
-		# if self.vae:
-		# 	print('running as VAE...computing ELBO loss')
-		# 	# todo: compute KL(q||p)
-		# 	q_probs = self.q.prob(self.z)
-		# 	log_p_probs = tf.log(tf.ones_like(q_probs)/(2**self.z_dim))
-		# 	kl_div = tf.reduce_sum(q_probs * (log_q_h_list - log_p_probs), axis=-1)/self.vimco_samples
-		# 	self.kl_div = kl_div
-		# 	print('kl shape: {}'.format(kl_div.get_shape()))
-		# 	elbo = reconstr_loss - kl_div  # elbo TODO: check if this needs to be flipped
-		# 	loss = elbo
-		# else:
-		# 	loss = reconstr_loss
-
-		if self.vae:
-			# try this construction of uniform distribution instead of actually using Unif
-			print('running as VAE...computing ELBO loss with "uniform" Bernoulli prior')
-			# todo: compute KL(q||p)
-			q_probs = self.q.prob(self.z)
-			p_bern_uniform = tf.ones_like(q_probs) * 0.5
-			p_dist = Bernoulli(probs=p_bern_uniform)
-			# print('train kl_div shape: {}'.format(tfd.kl_divergence(self.q, p_dist)))
-			# kl_div = tf.reduce_sum(tfd.kl_divergence(self.q, p_dist), axis=[1,2,3])
-			kl_div = tf.reduce_sum(tfd.kl_divergence(self.q, p_dist), axis=[2])
-			# kl_div = tf.reduce_sum(tfd.kl_divergence(self.q, p_dist), axis=-1)
-			self.kl_div = kl_div
-			# print('kl shape: {}'.format(kl_div.get_shape()))
-			print('reconstr_loss shape in train: {}'.format(reconstr_loss.shape))
-			print('kl div shape in train: {}'.format(kl_div.shape))
-			elbo = reconstr_loss - kl_div
-			loss = elbo
-		else:
-			loss = reconstr_loss
+		loss = reconstr_loss
 
 		# get vimco loss
 		local_l, w, full_loss = self.build_vimco_loss(loss)
@@ -727,66 +661,6 @@ class NECST():
 		return theta_loss, phi_loss, full_loss
 
 
-	# updated vimco loss
-	def vimco_mixture_loss(self, x, x_reconstr_logits):
-		"""
-		VIMCO for mixture of continuous and discrete codes
-		"""
-		reg_loss = tf.losses.get_regularization_loss()
-		if self.is_binary:
-			print('using Gaussian decoder and rounding to get hard {0, 1} values')
-		if self.img_dim == 64:
-			# celebA
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
-		else:
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=-1)
-		print('reconstr loss shape: {}'.format(reconstr_loss.get_shape()))
-
-		# saved the two continuous and discrete distributions in a list
-		cont_q, disc_q = self.q
-
-		cont_log_q_h_list = cont_q.log_prob(self.z[:, :, 0:self.cont_dim])
-		disc_log_q_h_list = disc_q.log_prob(self.z[:, :, self.cont_dim:])
-
-		# define your distribution q as a bernoulli, get multiple samples for VIMCO
-		# start from discrete portion only to evaluate log prob
-		cont_log_q_h = tf.reduce_sum(cont_log_q_h_list, axis=-1)
-		disc_log_q_h = tf.reduce_sum(disc_log_q_h_list, axis=-1)
-
-		# TODO: feed in the elbo instead of the reconstr_loss into build_vimco_loss
-		if self.vae:
-			raise NotImplementedError
-			# todo: compute KL(q||p)
-			# discrete KL
-		# 	disc_q_probs = self.disc_q.prob(self.z[:, :, self.cont_dim:])
-		# 	disc_p_probs = tf.ones_like(disc_q_probs)/(2 ** self.disc_dim)
-		# 	disc_kl_div = tf.reduce_sum(disc_q_probs * tf.log(disc_q_probs / disc_p_probs))
-
-		# 	# cont_kl
-
-		# 	# merge final kl
-		# 	loss = reconstr_loss - kl_div  # elbo TODO: check if this needs to be flipped
-		# else:
-		# 	loss = reconstr_loss
-
-		# get vimco loss
-		local_l, w, full_loss = self.build_vimco_loss(reconstr_loss)
-
-		# get appropriate losses for theta and phi respectively
-		theta_loss = (w * reconstr_loss) # shapes are both (5, batch_size)
-		phi_loss = tf.reduce_mean(local_l * (cont_log_q_h + disc_log_q_h)) + theta_loss
-
-		# first sum over each sample, then average over minibatch
-		theta_loss = tf.reduce_mean(tf.reduce_sum(theta_loss, axis=0))
-		phi_loss = tf.reduce_mean(tf.reduce_sum(phi_loss, axis=0)) + reg_loss
-		full_loss = tf.reduce_mean(full_loss)
-
-		# total_loss = reg_loss + full_loss
-		tf.summary.scalar('vimco (no gradient reduction) loss', full_loss)
-
-		return theta_loss, phi_loss, full_loss
-
-
 	def get_test_loss(self, x, x_reconstr_logits):
 
 		print('in function get_test_loss()')
@@ -799,41 +673,6 @@ class NECST():
 		else:
 			reconstr_loss = tf.reduce_mean(
 				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
-
-		# TODO: feed in the elbo instead of the reconstr_loss into build_vimco_loss
-		# if self.vae:
-		# 	print('running as VAE in test...computing ELBO loss')
-		# 	# todo: compute KL(q||p)
-		# 	q_probs = self.test_q.prob(self.z)
-		# 	p_probs = tf.ones_like(q_probs)/(2**self.z_dim)
-		# 	# kl_div = tf.reduce_sum(q_probs * tf.log(q_probs/p_probs))
-		# 	q_log_probs = self.test_q.log_prob(self.z)
-		# 	p_log_probs = tf.log(p_probs)
-		# 	kl_div = tf.reduce_sum(q_probs * (q_log_probs - p_log_probs), axis=-1)
-		# 	elbo = reconstr_loss - kl_div  # elbo TODO: check if this needs to be flipped
-		# 	loss = -elbo
-		# else:
-		# 	loss = reconstr_loss
-
-		if self.vae:
-			# try this construction of uniform distribution instead of actually using Unif
-			print('running as VAE...computing ELBO loss')
-			# todo: compute KL(q||p)
-			q_probs = self.test_q.prob(self.test_z)
-			p_bern_uniform = tf.ones_like(q_probs) * 0.5
-			p_dist = Bernoulli(probs=p_bern_uniform)
-
-			# print('test kl shape: {}'.format(tfd.kl_divergence(self.test_q, p_dist)))
-			# kl_div = tf.reduce_sum(tfd.kl_divergence(self.test_q, p_dist), axis=[1,2,3])
-			kl_div = tf.reduce_mean(tf.reduce_sum(tfd.kl_divergence(self.test_q, p_dist), axis=-1))
-			# kl_div = tf.reduce_sum(tfd.kl_divergence(self.test_q, p_dist), axis=-1)
-			# print('kl shape: {}'.format(kl_div.get_shape()))
-			print('reconstr_loss shape in test: {}'.format(reconstr_loss.shape))
-			print('kl div shape in test: {}'.format(kl_div.shape))
-			elbo = reconstr_loss - kl_div
-			loss = -elbo
-		else:
-			loss = reconstr_loss
 
 		# return tf.reduce_mean(loss)
 		return reconstr_loss
@@ -973,63 +812,6 @@ class NECST():
 
 		return mean, y, q, x_reconstr_logits
 		# return total_prob, y, classif_y, q, x_reconstr_logits
-
-
-	# mixture of continuous and discrete components in latent variable z
-	def create_cont_discrete_computation_graph(self, x, std=0.1, reuse=False):
-		"""
-		models (Y_i|X) as both having a continuous component and a discrete component
-		"""
-		# TODO
-		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
-		if self.img_dim == 64:
-			cont_disc_mean = self.mixture_complex_encoder(x, reuse=reuse)
-		else:
-			cont_disc_mean = self.encoder(x, reuse=reuse)
-		cont_mean = cont_disc_mean[:, 0:self.cont_dim]
-		disc_mean = cont_disc_mean[:, self.cont_dim:]
-
-		# TODO: test gumbel-softmax trick here
-		if self.discrete_relax:
-			raise NotImplementedError
-		else:
-			# hard VIMCO samples
-			print('using hard VIMCO samples...')
-			test = []
-			for i in range(self.vimco_samples):
-				eps = tf.random_normal(tf.shape(cont_mean), 0, 1, dtype=tf.float32)
-				test.append(eps)
-			eps = tf.stack(test, axis=0)
-			# eps = tf.random_normal(tf.shape(cont_mean), 0, 1, dtype=tf.float32)
-			cont_z = tf.add(cont_mean, tf.multiply(self.adj_noise, eps))
-			# cont_z = tf.add(cont_mean, tf.multiply(std, eps))
-
-			# discrete portion drawn from Bernoulli
-			if self.perturb_probs != 0:
-				y_hat_prob = tf.nn.sigmoid(disc_mean)
-				# channel noise
-				total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
-				disc_q = Bernoulli(probs=total_prob)
-			else:
-				print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
-				disc_q = Bernoulli(logits=disc_mean)
-			cont_q = Normal(loc=cont_mean, scale=std)
-			
-			# TODO: you'll have to do something about the fact that you have 5 VIMCO samples here!!
-			disc_z = tf.cast(disc_q.sample(self.vimco_samples), tf.float32)
-
-		# concatenate continuous and discrete things together
-		z = tf.concat((cont_z, disc_z), -1)
-		print('z shape: {}'.format(z.get_shape()))
-
-		# pass to decoder
-		if self.img_dim == 64:
-			x_reconstr_logits = self.complex_decoder(z, reuse=reuse)
-		else:
-			x_reconstr_logits = self.decoder(z, reuse=reuse)
-		print('train x reconstr logits shape: {}'.format(x_reconstr_logits.get_shape()))
-		
-		return [cont_mean, disc_mean], z, [cont_q, disc_q], x_reconstr_logits
 
 
 	# TODO: vanilla beta-VAE for celebA
@@ -1272,54 +1054,6 @@ class NECST():
 		# return total_prob, y, classif_y, q, x_reconstr_logits
 
 
-	def get_cont_disc_stochastic_test_sample(self, x, std=0.1, reuse=False):
-		"""
-		use collapsed Bernoulli at test time as well
-		"""
-		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
-		if self.img_dim == 64:
-			cont_disc_mean = self.mixture_complex_encoder(x, reuse=tf.AUTO_REUSE)
-		else:
-			# cont_mean, disc_mean = self.encoder(x, reuse=tf.AUTO_REUSE)
-			cont_disc_mean = self.encoder(x, reuse=tf.AUTO_REUSE)
-		cont_mean = cont_disc_mean[:, 0:self.cont_dim]
-		disc_mean = cont_disc_mean[:, self.cont_dim:]
-		
-		# continuous segment drawn from Gaussian
-		eps = tf.random_normal(tf.shape(cont_mean), 0, 1, dtype=tf.float32)
-		cont_z = tf.add(cont_mean, tf.multiply(self.adj_noise, eps))
-		# cont_z = tf.add(cont_mean, tf.multiply(std, eps))
-
-		# grab encodings for looking at latent space
-		# what i'm doing is grabbing the discrete and continuous logits and concat-ing
-		no_err_q = Bernoulli(logits=disc_mean)
-		classif_disc_z = tf.cast(no_err_q.sample(), tf.float32)
-		classif_z = tf.concat((cont_z, classif_disc_z), axis=1)
-
-		# discrete portion drawn from Bernoulli
-		if self.perturb_probs != 0:
-			y_hat_prob = tf.nn.sigmoid(disc_mean)
-			# channel noise
-			total_prob = y_hat_prob - (2 * y_hat_prob * self.test_perturb_probs) + self.test_perturb_probs
-			q = Bernoulli(probs=y_hat_prob)
-		else:
-			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
-			q = Bernoulli(logits=disc_mean)
-		disc_z = tf.cast(q.sample(), tf.float32)
-
-		# concatenate continuous and discrete things together
-		z = tf.concat((cont_z, disc_z), 1)
-
-		# pass to decoder
-		if self.img_dim == 64:
-			x_reconstr_logits = self.complex_decoder(z, reuse=tf.AUTO_REUSE)
-		else:
-			x_reconstr_logits = self.decoder(z, reuse=tf.AUTO_REUSE)
-		print('test x reconstr logits shape: {}'.format(x_reconstr_logits.get_shape()))
-		
-		return [cont_mean, disc_mean], z, classif_z, x_reconstr_logits	
-
-
 	def get_stochastic_test_sample(self, x, std=0.1, reuse=False):
 		# TODO: will have to adjust this as well!
 
@@ -1349,14 +1083,7 @@ class NECST():
 		"""
 		
 		sess = self.sess
-		# TODO: just for debugging purposes
-		if self.combine:
-			datasource1 = Datasource(self.sess)
-			FLAGS.datasource1 = 'nah'
-			datasource2 = Datasource(self.sess)
-			FLAGS.datasource1 = 'mnist'
-		else:
-			datasource = self.datasource
+		datasource = self.datasource
 
 		if FLAGS.resume:
 			if ckpt is None:
@@ -1379,45 +1106,16 @@ class NECST():
 				sess.run(self.assign_A_op)
 
 		t0 = time.time()
-		# TODO: need to do two datasources here
-		if not self.combine:
-			train_dataset = datasource.get_dataset('train')
-			train_dataset = train_dataset.batch(FLAGS.batch_size)
-			train_dataset = train_dataset.shuffle(buffer_size=10000)
-			train_iterator = train_dataset.make_initializable_iterator()
-			next_train_batch = train_iterator.get_next()
+		train_dataset = datasource.get_dataset('train')
+		train_dataset = train_dataset.batch(FLAGS.batch_size)
+		train_dataset = train_dataset.shuffle(buffer_size=10000)
+		train_iterator = train_dataset.make_initializable_iterator()
+		next_train_batch = train_iterator.get_next()
 
-			valid_dataset = datasource.get_dataset('valid')
-			# valid_dataset = valid_dataset.batch(FLAGS.batch_size*10)
-			valid_dataset = valid_dataset.batch(FLAGS.batch_size)
-			valid_iterator = valid_dataset.make_initializable_iterator()
-			next_valid_batch = valid_iterator.get_next()
-		else:
-			# zip the two datsources together
-			mnist_train = datasource1.get_dataset('train')
-			omniglot_train = datasource2.get_dataset('train')
-
-			def stack(*inputs):
-				return tf.stack(inputs)
-
-			train_dataset = tf.data.Dataset.zip((mnist_train, omniglot_train))
-			train_dataset = train_dataset.map(stack) 
-			train_dataset = train_dataset.apply(tf.contrib.data.unbatch())
-			train_dataset = train_dataset.batch(FLAGS.batch_size)
-			train_dataset = train_dataset.shuffle(buffer_size=10000)
-			train_iterator = train_dataset.make_initializable_iterator()
-			next_train_batch = train_iterator.get_next()
-
-			# validation set
-			mnist_valid = datasource1.get_dataset('valid')
-			omniglot_valid = datasource2.get_dataset('valid')
-
-			valid_dataset = tf.data.Dataset.zip((mnist_valid, omniglot_valid))
-			valid_dataset = valid_dataset.map(stack)
-			valid_dataset = valid_dataset.apply(tf.contrib.data.unbatch())
-			valid_dataset = valid_dataset.batch(FLAGS.batch_size)
-			valid_iterator = valid_dataset.make_initializable_iterator()
-			next_valid_batch = valid_iterator.get_next()
+		valid_dataset = datasource.get_dataset('valid')
+		valid_dataset = valid_dataset.batch(FLAGS.batch_size)
+		valid_iterator = valid_dataset.make_initializable_iterator()
+		next_valid_batch = valid_iterator.get_next()
 
 		self.train_writer = tf.summary.FileWriter(FLAGS.outdir + '/train', graph=tf.get_default_graph())
 		self.valid_writer = tf.summary.FileWriter(FLAGS.outdir + '/valid', graph=tf.get_default_graph())
@@ -1451,8 +1149,6 @@ class NECST():
 
 					# REINFORCE-style training with VIMCO or vanilla gradient update
 					if self.stochastic_discrete_latent and not self.discrete_relax:
-						# print('looking at kl values: {}'.format(sess.run(self.kl_div, feed_dict)))
-						# print('looking at probs: {}'.format(sess.run(self.mean, feed_dict)))
 						sess.run([self.discrete_train_op1, self.discrete_train_op2], feed_dict)
 					else:
 						# this works for both gumbel-softmax and deterministic encoder
@@ -1472,15 +1168,6 @@ class NECST():
 				if (counter % 1000 == 0) and (counter > 0):
 					self.adj_temp = np.maximum(self.tau * np.exp(-self.anneal_rate * counter), self.min_temp)
 					print('adjusted temperature to: {}'.format(self.adj_temp))
-			##########
-			# end of training epoch; adjust continuous variable noise level here 
-			if self.anneal_noise:
-				# 0.1 is the gaussian noise level that tends to work well
-				if (counter % 1000 == 0) and (counter > 0):
-					# use a linear annealing schedule
-					self.adj_noise = np.maximum(
-						self.noise_std * np.exp(-self.anneal_rate * counter), 0.1)
-					print('adjusted gaussian noise std to: {}'.format(self.adj_noise))
 			# enter validation phase
 			if verbose:
 				epoch_train_loss /= num_batches
@@ -1535,26 +1222,10 @@ class NECST():
 		
 		self.saver.restore(sess, ckpt)
 
-		if not self.combine:
-			test_dataset = datasource.get_dataset('test')
-			test_dataset = test_dataset.batch(FLAGS.batch_size)
-			test_iterator = test_dataset.make_initializable_iterator()
-			next_test_batch = test_iterator.get_next()
-		else:
-			# zip the two datsources together
-			print('zipping the two datasources together for the test set')
-			mnist_test = datasource1.get_dataset('test')
-			omniglot_test = datasource2.get_dataset('test')
-
-			def stack(*inputs):
-				return tf.stack(inputs)
-
-			test_dataset = tf.data.Dataset.zip((mnist_test, omniglot_test))
-			test_dataset = test_dataset.map(stack) 
-			test_dataset = test_dataset.apply(tf.contrib.data.unbatch())
-			test_dataset = test_dataset.batch(FLAGS.batch_size)
-			test_iterator = test_dataset.make_initializable_iterator()
-			next_test_batch = test_iterator.get_next()
+		test_dataset = datasource.get_dataset('test')
+		test_dataset = test_dataset.batch(FLAGS.batch_size)
+		test_iterator = test_dataset.make_initializable_iterator()
+		next_test_batch = test_iterator.get_next()
 
 		test_loss = 0.
 		num_batches = 0.
@@ -1565,7 +1236,6 @@ class NECST():
 		labels = []
 		reconstr = []
 		truth = []
-		# bern_probs = []
 		sess.run(test_iterator.initializer)
 		while True:
 			try:
@@ -1629,27 +1299,10 @@ class NECST():
 		self.saver.restore(sess, ckpt)
 
 		if pkl_file is None:
-			if not self.combine:
-				test_dataset = datasource.get_dataset('test')
-				test_dataset = test_dataset.batch(FLAGS.batch_size)
-				test_iterator = test_dataset.make_initializable_iterator()
-				next_test_batch = test_iterator.get_next()
-			else:
-				# zip the two datsources together
-				print('zipping the two datasources together for the test set')
-				mnist_test = datasource1.get_dataset('test')
-				omniglot_test = datasource2.get_dataset('test')
-
-				def stack(*inputs):
-					return tf.stack(inputs)
-
-				test_dataset = tf.data.Dataset.zip((mnist_test, omniglot_test))
-				test_dataset = test_dataset.map(stack) 
-				test_dataset = test_dataset.apply(tf.contrib.data.unbatch())
-				test_dataset = test_dataset.batch(FLAGS.batch_size)
-				test_dataset = test_dataset.shuffle(buffer_size=10000)
-				test_iterator = test_dataset.make_initializable_iterator()
-				next_test_batch = test_iterator.get_next()
+			test_dataset = datasource.get_dataset('test')
+			test_dataset = test_dataset.batch(FLAGS.batch_size)
+			test_iterator = test_dataset.make_initializable_iterator()
+			next_test_batch = test_iterator.get_next()
 
 			sess.run(test_iterator.initializer)
 			if not self.is_binary:
@@ -1713,27 +1366,10 @@ class NECST():
 		self.saver.restore(sess, ckpt)
 
 		print('initializing with samples from test set...')
-		if not self.combine:
-			test_dataset = datasource.get_dataset('test')
-			test_dataset = test_dataset.batch(FLAGS.batch_size)
-			test_iterator = test_dataset.make_initializable_iterator()
-			next_test_batch = test_iterator.get_next()
-		else:
-			# zip the two datsources together
-			print('zipping the two datasources together for the test set')
-			mnist_test = datasource1.get_dataset('test')
-			omniglot_test = datasource2.get_dataset('test')
-
-			def stack(*inputs):
-				return tf.stack(inputs)
-
-			test_dataset = tf.data.Dataset.zip((mnist_test, omniglot_test))
-			test_dataset = test_dataset.map(stack) 
-			test_dataset = test_dataset.apply(tf.contrib.data.unbatch())
-			test_dataset = test_dataset.batch(FLAGS.batch_size)
-			# test_dataset = test_dataset.shuffle(buffer_size=10000)
-			test_iterator = test_dataset.make_initializable_iterator()
-			next_test_batch = test_iterator.get_next()
+		test_dataset = datasource.get_dataset('test')
+		test_dataset = test_dataset.batch(FLAGS.batch_size)
+		test_iterator = test_dataset.make_initializable_iterator()
+		next_test_batch = test_iterator.get_next()
 
 		sess.run(test_iterator.initializer)
 		if not self.is_binary:
