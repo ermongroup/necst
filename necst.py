@@ -15,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import itertools
 import tensorflow.contrib.distributions as tfd
 from noisy_channels import *
-from tensorflow.contrib.distributions import Bernoulli, Categorical, RelaxedBernoulli, RelaxedOneHotCategorical, Normal
+from tensorflow.contrib.distributions import Bernoulli, Categorical, RelaxedBernoulli, Normal
 import pickle
 from itertools import product, chain
 from tensorflow.python.platform import flags
@@ -50,11 +50,9 @@ class NECST():
 		self.transfer = FLAGS.transfer
 
 		self.last_layer_act = tf.nn.sigmoid if FLAGS.non_linear_act else None
-		self.stochastic_discrete_latent = FLAGS.stochastic_discrete_latent
 
 		# perturbation experiment
 		self.noisy_mnist = FLAGS.noisy_mnist
-		self.channel = 1  # 1 channel for MNIST
 
 		# for vimco
 		self.is_binary = FLAGS.is_binary
@@ -63,16 +61,13 @@ class NECST():
 		# other params
 		self.activation = FLAGS.activation
 		self.lr = FLAGS.lr 
-		if self.stochastic_discrete_latent:
-			# if need to use REINFORCE-like optimization scheme
-			if not self.discrete_relax:
-				self.theta_optimizer = FLAGS.optimizer(learning_rate=self.lr)
-				self.phi_optimizer = FLAGS.optimizer(learning_rate=self.lr)
-			else:
-				# gumbel-softmax doesn't require 2 optimizers
-				self.optimizer = FLAGS.optimizer
+		# if need to use REINFORCE-like optimization scheme
+		if not self.discrete_relax:
+			self.theta_optimizer = FLAGS.optimizer(learning_rate=self.lr)
+			self.phi_optimizer = FLAGS.optimizer(learning_rate=self.lr)
 		else:
-			self.optimizer = FLAGS.optimizer  
+			# gumbel-softmax doesn't require 2 optimizers
+			self.optimizer = FLAGS.optimizer
 		self.training = True
 
 		# noise levels
@@ -96,55 +91,28 @@ class NECST():
 		self.noise_std = tf.placeholder_with_default(FLAGS.noise_std, shape=(), name='noise_std')
 		self.reg_param = tf.placeholder_with_default(FLAGS.reg_param, shape=(), name='reg_param')
 
-		# graph construction, depending on whether you want deterministic or stochastic latents
-		if self.stochastic_discrete_latent:
-			# check whether you want continuous/discrete mixture
-			if not self.mixture_code:
-				print('self.mixture_code is set to False')
-				# gumbel-softmax and vimco-compatible; only discrete bits
-				if self.img_dim == 64:
-					self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.celebA_create_collapsed_computation_graph(self.x, std=self.noise_std)
-				else:
-					# MNIST
-					if self.channel_model == 'bsc':
-						self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.create_collapsed_computation_graph(self.x, std=self.noise_std)
-					else:
-						# delted self.classif_z
-						self.mean, self.z, self.q, self.x_reconstr_logits = self.create_erasure_collapsed_computation_graph(self.x, std=self.noise_std)
-				if self.channel_model == 'bsc':
-					self.test_mean, self.test_z, self.test_classif_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_stochastic_test_sample(self.x, std=self.noise_std)
-				else:
-					# deleted self.test_classif_z
-					self.test_mean, self.test_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_erasure_stochastic_test_sample(self.x, std=self.noise_std)
-				if not self.discrete_relax:
-					print('using vimco loss...')
-					if self.noisy_mnist:
-						print('training with noisy MNIST, using true x values for vimco loss...')
-						self.theta_loss, self.phi_loss, self.reconstr_loss = self.vimco_loss(
-							self.true_x, self.x_reconstr_logits)
-					else:
-						# TODO: you'll have to change this part for VAE
-						self.theta_loss, self.phi_loss, self.reconstr_loss = self.vimco_loss(self.x, self.x_reconstr_logits)
-				else:
-					# TODO: you'll have to change this for VAE
-					self.loss, self.reconstr_loss = self.get_loss(self.x, self.x_reconstr_logits)
-			else:
-				print('using mixture of continuous and discrete codes...')
-				self.mean, self.z, self.q, self.x_reconstr_logits = self.create_cont_discrete_computation_graph(self.x, std=self.noise_std)
-				self.test_mean, self.test_z, self.test_classif_z, self.test_x_reconstr_logits = self.get_cont_disc_stochastic_test_sample(self.x, std=self.noise_std)
-				if not self.discrete_relax:
-					# TODO: you'll have to change this for VAE
-					self.theta_loss, self.phi_loss, self.reconstr_loss = self.vimco_mixture_loss(self.x, self.x_reconstr_logits)
-				else:
-					# TODO: you'll have to change this for VAE
-					self.loss, self.reconstr_loss = self.get_loss(self.x, self.x_reconstr_logits)
+		# gumbel-softmax and vimco-compatible; only discrete bits
+		if self.img_dim == 64:
+			self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.celebA_create_collapsed_computation_graph(self.x, std=self.noise_std)
 		else:
-			# deterministic encoder
-			# print('using deterministic encoder...')
-			print('using continuous setup...')
-			# TODO: will have to get the item names right here
-			self.mean, self.z, self.x_reconstr_logits = self.create_computation_graph(self.x, std=self.noise_std)
-			# self.test_mean, self.test_z, self.test_x_reconstr_logits = self.get_test_sample(self.x, std=self.noise_std)
+			# MNIST
+			if self.channel_model == 'bsc':
+				self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.create_collapsed_computation_graph(self.x, std=self.noise_std)
+			else:
+				self.mean, self.z, self.q, self.x_reconstr_logits = self.create_erasure_collapsed_computation_graph(self.x, std=self.noise_std)
+		if self.channel_model == 'bsc':
+			self.test_mean, self.test_z, self.test_classif_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_stochastic_test_sample(self.x, std=self.noise_std)
+		else:
+			self.test_mean, self.test_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_erasure_stochastic_test_sample(self.x, std=self.noise_std)
+		if not self.discrete_relax:
+			print('using vimco loss...')
+			if self.noisy_mnist:
+				print('training with noisy MNIST, using true x values for vimco loss...')
+				self.theta_loss, self.phi_loss, self.reconstr_loss = self.vimco_loss(
+					self.true_x, self.x_reconstr_logits)
+			else:
+				self.theta_loss, self.phi_loss, self.reconstr_loss = self.vimco_loss(self.x, self.x_reconstr_logits)
+		else:
 			self.loss, self.reconstr_loss = self.get_loss(self.x, self.x_reconstr_logits)
 		
 		# loss calculation
@@ -158,26 +126,21 @@ class NECST():
 		self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
 		# set up optimization op
-		if self.stochastic_discrete_latent:
-			if not self.discrete_relax:
-				print('SETUP: using mutliple train ops due to discrete latent variable')
-				# get decoder and encoder variables
-				theta_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/decoder')
-				self.theta_vars = theta_vars
-				self.theta_grads, variables = zip(*self.theta_optimizer.compute_gradients(self.theta_loss, var_list=theta_vars))
-				self.discrete_train_op1 = self.theta_optimizer.minimize(self.theta_loss, global_step=self.global_step, var_list=theta_vars)
+		if not self.discrete_relax:
+			print('SETUP: using mutliple train ops due to discrete latent variable')
+			# get decoder and encoder variables
+			theta_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/decoder')
+			self.theta_vars = theta_vars
+			self.theta_grads, variables = zip(*self.theta_optimizer.compute_gradients(self.theta_loss, var_list=theta_vars))
+			self.discrete_train_op1 = self.theta_optimizer.minimize(self.theta_loss, global_step=self.global_step, var_list=theta_vars)
 
-				# encoder variables
-				phi_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/encoder')
-				self.phi_vars = phi_vars
-				self.phi_grads, variables = zip(*self.phi_optimizer.compute_gradients(self.phi_loss, var_list=phi_vars))
-				self.discrete_train_op2 = self.phi_optimizer.minimize(self.phi_loss, global_step=self.global_step, var_list=phi_vars)
-			else:
-				# gumbel-softmax
-				self.train_op = self.optimizer(learning_rate=self.lr).minimize(self.loss, 
-					global_step=self.global_step, var_list=train_vars)
+			# encoder variables
+			phi_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/encoder')
+			self.phi_vars = phi_vars
+			self.phi_grads, variables = zip(*self.phi_optimizer.compute_gradients(self.phi_loss, var_list=phi_vars))
+			self.discrete_train_op2 = self.phi_optimizer.minimize(self.phi_loss, global_step=self.global_step, var_list=phi_vars)
 		else:
-			# this currently works for both deterministic discrete rounding/continuous/gumbel-softmax relaxation cases
+			# gumbel-softmax
 			self.train_op = self.optimizer(learning_rate=self.lr).minimize(self.loss, 
 				global_step=self.global_step, var_list=train_vars)
 		self.vars = train_vars
@@ -677,13 +640,6 @@ class NECST():
 		# return tf.reduce_mean(loss)
 		return reconstr_loss
 
-	def create_computation_graph(self, x, std=0.1, reuse=False):
-		mean = self.encoder(x, reuse=reuse)
-		eps = tf.random_normal(tf.shape(mean), 0, 1, dtype=tf.float32)
-		z = tf.add(mean, tf.multiply(std, eps))
-		x_reconstr_logits = self.decoder(z, reuse=reuse)
-
-		return mean, z, x_reconstr_logits
 
 	# TODO: stefano's suggestion
 	def create_collapsed_computation_graph(self, x, std=0.1, reuse=False):
@@ -1148,10 +1104,10 @@ class NECST():
 						feed_dict = {self.x: x}
 
 					# REINFORCE-style training with VIMCO or vanilla gradient update
-					if self.stochastic_discrete_latent and not self.discrete_relax:
+					if not self.discrete_relax:
 						sess.run([self.discrete_train_op1, self.discrete_train_op2], feed_dict)
 					else:
-						# this works for both gumbel-softmax and deterministic encoder
+						# this works for both gumbel-softmax
 						sess.run(self.train_op, feed_dict)
 
 					batch_loss, train_summary, gs = sess.run([
@@ -1207,14 +1163,7 @@ class NECST():
 	def test(self, ckpt=None):
 
 		sess = self.sess
-		# TODO: just for debugging purposes
-		if self.combine:
-			datasource1 = Datasource(self.sess)
-			FLAGS.datasource1 = 'nah'
-			datasource2 = Datasource(self.sess)
-			FLAGS.datasource1 = 'mnist'
-		else:
-			datasource = self.datasource
+		datasource = self.datasource
 		self.training = False
 
 		if ckpt is None:
@@ -1230,12 +1179,6 @@ class NECST():
 		test_loss = 0.
 		num_batches = 0.
 		num_incorrect = 0
-		# saving things for downstream analysis
-		res = {}
-		encs = []
-		labels = []
-		reconstr = []
-		truth = []
 		sess.run(test_iterator.initializer)
 		while True:
 			try:
@@ -1252,15 +1195,11 @@ class NECST():
 				else:
 					feed_dict = {self.x: x}
 				# what to save and what to not
-				if self.img_dim != 64 and not self.combine:
+				if self.img_dim != 64:
 					x_reconstr_logits = sess.run([self.x_reconstr_logits], feed_dict)
 				else:
 					x_reconstr_logits = sess.run(self.test_x_reconstr_logits, feed_dict)
 				batch_test_loss = sess.run(self.test_loss, feed_dict)
-				# save things
-				reconstr.append(x_reconstr_logits)
-				truth.append(x)
-				###########
 				test_loss += batch_test_loss
 
 				# round output of Gaussian decoder to see how many were incorrectly decoded
@@ -1285,14 +1224,7 @@ class NECST():
 		import pickle
 
 		sess = self.sess
-		# TODO: just for debugging purposes
-		if self.combine:
-			datasource1 = Datasource(self.sess)
-			FLAGS.datasource1 = 'nah'
-			datasource2 = Datasource(self.sess)
-			FLAGS.datasource1 = 'mnist'
-		else:
-			datasource = self.datasource
+		datasource = self.datasource
 
 		if ckpt is None:
 			ckpt = tf.train.latest_checkpoint(FLAGS.logdir)
@@ -1352,14 +1284,7 @@ class NECST():
 	def markov_chain(self, ckpt=None):
 
 		sess = self.sess
-		# TODO: just for debugging purposes
-		if self.combine:
-			datasource1 = Datasource(self.sess)
-			FLAGS.datasource1 = 'nah'
-			datasource2 = Datasource(self.sess)
-			FLAGS.datasource1 = 'mnist'
-		else:
-			datasource = self.datasource
+		datasource = self.datasource
 
 		if ckpt is None:
 			ckpt = tf.train.latest_checkpoint(FLAGS.logdir)

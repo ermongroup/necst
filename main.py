@@ -27,7 +27,6 @@ flags.DEFINE_bool('dump', True, 'Dumps to log.txt if True')
 # Probabilistic latent bit representation
 flags.DEFINE_bool('is_binary', False, 'True if dataset is binary, false otherwise.')
 flags.DEFINE_integer('vimco_samples', 5, 'number of VIMCO samples to use during training')
-flags.DEFINE_bool('stochastic_discrete_latent', True, 'use REINFORCE-type training to train')
 
 # Noise specifications
 flags.DEFINE_bool('noisy_mnist', False, 'specify whether to train necst with noisy MNIST')
