@@ -1,4 +1,4 @@
-# NOTE: most of code from aditya-grover's UAE project (TODO: find link)
+# starter code from: https://github.com/aditya-grover/uae
 from utils import *
 import tensorflow as tf 
 import numpy as np
@@ -14,7 +14,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import itertools
 import tensorflow.contrib.distributions as tfd
-from tensorflow.contrib.distributions import Bernoulli, Categorical, RelaxedBernoulli, Normal
+from tensorflow.contrib.distributions import Bernoulli, Categorical, RelaxedBernoulli
 import pickle
 from itertools import product, chain
 from tensorflow.python.platform import flags
@@ -74,9 +74,6 @@ class NECST():
 		self.perturb_probs = FLAGS.perturb_probs
 		self.test_perturb_probs = FLAGS.test_perturb_probs
 
-		# mask
-		self.mask = tf.placeholder_with_default(
-			np.ones((FLAGS.batch_size, self.z_dim, 3)), shape=[None, self.z_dim, 3])
 		# TODO: hacky - fix later
 		if self.img_dim == 64:
 			self.x = tf.placeholder(self.datasource.dtype, shape=[None, self.img_dim, self.img_dim, 3], name='vae_input')
@@ -208,10 +205,8 @@ class NECST():
 
 	def convolutional_32_encoder(self, x, reuse=True):
 		"""
-		FINAL ARCHITECTURE!!
 		more complex encoder architecture for images with more than 1 color channel
 		""" 
-		# TODO: may have to do PCA + fc MLP
 		enc_layers = self.enc_layers
 		regularizer = tf.contrib.layers.l2_regularizer(scale=self.reg_param)
 		with tf.variable_scope('model', reuse=reuse):
@@ -235,7 +230,6 @@ class NECST():
 
 	def convolutional_32_decoder(self, z, reuse=True):
 		"""
-		FINAL ARCHITECTURE!!
 		more complex decoder architecture for images with more than 1 color channel (e.g. celebA)
 		"""
 		z = tf.convert_to_tensor(z)
@@ -249,21 +243,13 @@ class NECST():
 				if len(z.get_shape().as_list()) == 2:
 					# test
 					d = tf.layers.dense(z, 4*4*512, activation=tf.nn.relu, use_bias=False, reuse=reuse, name='fc1')	
-					# print('init d shape: {}'.format(d.get_shape()))	
 					d = tf.reshape(d, (-1, 4, 4, 512))
-					# print('d shape: {}'.format(d.get_shape()))
 					deconv1 = tf.layers.conv2d_transpose(d, 512, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv1')
 					deconv1 = tf.layers.batch_normalization(deconv1)
-
-					# print('deconv1 shape: {}'.format(deconv1.get_shape()))
 					deconv2 = tf.layers.conv2d_transpose(deconv1, 256, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv2')
 					deconv2 = tf.layers.batch_normalization(deconv2)
-
-					# print('deconv2 shape: {}'.format(deconv2.get_shape()))
 					deconv3 = tf.layers.conv2d_transpose(deconv2, 128, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv3')
 					deconv3 = tf.layers.batch_normalization(deconv3)
-					print('deconv3 shape: {}'.format(deconv3.get_shape()))
-
 					deconv4 = tf.layers.conv2d(deconv3, 3, 1, strides=(1,1), padding="VALID", activation=self.last_layer_act, reuse=reuse, name='deconv4')
 					return deconv4
 				else:
@@ -273,20 +259,12 @@ class NECST():
 						z_sample = z[i]
 						d = tf.layers.dense(z_sample, 4*4*512, activation=tf.nn.relu, use_bias=False, reuse=reuse, name='fc1')	
 						d = tf.reshape(d, (-1, 4, 4, 512))
-						# print('d shape: {}'.format(d.get_shape()))
 						deconv1 = tf.layers.conv2d_transpose(d, 512, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv1')
 						deconv1 = tf.layers.batch_normalization(deconv1)
-
-						# print('deconv1 shape: {}'.format(deconv1.get_shape()))
 						deconv2 = tf.layers.conv2d_transpose(deconv1, 256, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv2')
 						deconv2 = tf.layers.batch_normalization(deconv2)
-
-						# print('deconv2 shape: {}'.format(deconv2.get_shape()))
 						deconv3 = tf.layers.conv2d_transpose(deconv2, 128, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, reuse=reuse, name='deconv3')
 						deconv3 = tf.layers.batch_normalization(deconv3)
-						print('deconv3 shape: {}'.format(deconv3.get_shape()))
-						
-						# print('deconv3 shape: {}'.format(deconv3.get_shape()))
 						deconv4 = tf.layers.conv2d(deconv3, 3, 1, strides=(1,1), padding="VALID", activation=tf.nn.sigmoid, reuse=reuse, name='deconv4')
 						samples.append(deconv4)
 		x_reconstr_logits = tf.stack(samples, axis=0)
@@ -305,13 +283,11 @@ class NECST():
 		with tf.variable_scope('model', reuse=reuse):
 			with tf.variable_scope('encoder', reuse=reuse):
 				conv1 = tf.layers.conv2d(x, 64, (3,3), padding="SAME", activation=None, kernel_regularizer=regularizer, reuse=reuse, name='conv1')
-				# print('conv1 shape: {}'.format(conv1.get_shape()))
 				bn1 = tf.layers.batch_normalization(conv1)
 				relu1 = tf.nn.relu(bn1)
 				conv1_out = tf.layers.max_pooling2d(relu1, (2,2), (2,2), padding='same')
 				# 2nd convolutional layer
 				conv2 = tf.layers.conv2d(conv1_out, 32, (3,3), padding="SAME", activation=None, kernel_regularizer=regularizer, reuse=reuse, name='conv2')
-				# print('conv2 shape: {}'.format(conv2.get_shape()))
 				bn2 = tf.layers.batch_normalization(conv2)
 				relu2 = tf.nn.relu(bn2)
 				conv2_out = tf.layers.max_pooling2d(relu2, (2,2), (2,2), padding='same')
@@ -320,7 +296,6 @@ class NECST():
 				bn3 = tf.layers.batch_normalization(conv3)
 				relu3 = tf.nn.relu(bn3)
 				conv3_out = tf.layers.max_pooling2d(relu3, (2,2), (2,2), padding='same')
-				# print('after 3 convolutions, shape: {}'.format(conv3_out.get_shape()))
 				flattened = tf.reshape(conv3_out, (-1, 4*4*16))
 				z_mean = tf.layers.dense(flattened, enc_layers[-1], activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-final')
 		return z_mean
@@ -504,7 +479,6 @@ class NECST():
 				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
 			# TODO: binary MNIST
 			# reconstr_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-							# logits=x_reconstr_logits, labels=x))
 		tf.summary.scalar('reconstruction loss', reconstr_loss)
 		total_loss = reconstr_loss + reg_loss
 		
@@ -615,7 +589,6 @@ class NECST():
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
-		print('in create_collapsed_computation_graph()')
 		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
 		dset_name = self.datasource.target_dataset
 		if dset_name == 'mnist':
@@ -630,7 +603,7 @@ class NECST():
 		elif dset_name == 'svhn':
 			mean = self.convolutional_32_encoder(x, reuse=reuse)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
 
 		# for downstream classification
@@ -661,7 +634,7 @@ class NECST():
 		elif dset_name == 'svhn':
 			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
 
 		# return mean, y, total_prob, q, x_reconstr_logits
@@ -685,11 +658,6 @@ class NECST():
 		else:
 			print('my dataset name is: {} and im lazy'.format(dset_name))
 			raise NotImplementedError
-
-		# TODO!!!!!
-		# for downstream classification
-		# classif_q = Bernoulli(logits=mean)
-		# classif_y = tf.cast(classif_q.sample(), tf.float32)
 		
 		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
 		if self.perturb_probs != 0:
@@ -714,9 +682,6 @@ class NECST():
 
 		# use VIMCO if self.vimco_samples > 1, else just one sample
 		y = tf.cast(q.sample(self.vimco_samples), tf.float32)
-
-		print('y shape: {}'.format(y.get_shape()))
-
 		if dset_name == 'mnist' or dset_name == 'BinaryMNIST':
 			x_reconstr_logits = self.decoder(y, reuse=reuse)
 		elif dset_name == 'omniglot':
@@ -724,7 +689,7 @@ class NECST():
 		elif dset_name == 'cifar10':
 			x_reconstr_logits = self.cifar10_convolutional_decoder(y, reuse=reuse)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
 
 		return mean, y, q, x_reconstr_logits
@@ -853,9 +818,6 @@ class NECST():
 		else:
 			print('Use BSC if there is no channel noise!')
 			raise NotImplementedError
-			# print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
-			# total_prob = tf.nn.sigmoid(mean)
-			# q = Bernoulli(logits=mean)
 
 		y = tf.cast(q.sample(), tf.float32)
 		print('test y shape: {}'.format(y.get_shape()))
@@ -931,11 +893,9 @@ class NECST():
 			sess.run(valid_iterator.initializer)
 			epoch_train_loss = 0.
 			num_batches = 0.
-			# counter = 0
 			while True:
 				try:
 					self.training = True
-					counter += 1
 					if not self.is_binary:
 						x = sess.run(next_train_batch)[0]
 					else:
@@ -972,7 +932,6 @@ class NECST():
 			if verbose:
 				epoch_train_loss /= num_batches
 				self.training = False
-				# print('in validation phase')
 				if not self.is_binary:
 					x = sess.run(next_valid_batch)[0]
 				else:
@@ -1097,7 +1056,8 @@ class NECST():
 		# grab reconstructions
 		x_reconstr_logits = sess.run(self.test_x_reconstr_logits, feed_dict)
 		# TODO: rounding values here to get binary MNIST
-		# x_reconstr_logits = np.round(x_reconstr_logits)
+		if self.is_binary:
+			x_reconstr_logits = np.round(x_reconstr_logits)
 		print(np.max(x_reconstr_logits), np.min(x_reconstr_logits))
 		print(np.max(x), np.min(x))
 		

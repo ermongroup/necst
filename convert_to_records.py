@@ -48,29 +48,6 @@ def convert_to(dataset, name):
   writer.close()
 
 
-def convert_stitched_mnist(dataset, name):
-  """
-  Converts a dataset to tfrecords.
-  Specifically for this function, we are stitching 10 MNIST digits together
-  to get a 7840-bit message
-
-  There are currently no labels associated with these stitched digits
-  """
-  images = dataset.images
-  num_examples = images.shape[0]
-  filename = os.path.join(FLAGS.directory, FLAGS.dataset, name + '.tfrecords')
-  print('Writing', filename)
-  writer = tf.python_io.TFRecordWriter(filename)
-
-  # stitch together 10 examples at a time
-  for index in range(0, num_examples, 5):
-    image_raw = images[index:(index+5)].tostring()
-    example = tf.train.Example(features=tf.train.Features(feature={
-        'features': _bytes_feature(image_raw)}))
-    writer.write(example.SerializeToString())
-  writer.close()
-
-
 def convert_binary_mnist(fname, name):
   """Converts a dataset to tfrecords."""
   images = np.loadtxt(fname)
@@ -133,7 +110,6 @@ def main(unused_argv):
     convert_random_bits(os.path.join(FLAGS.directory, FLAGS.dataset,'random_bits_test.npy'), 'rand_bits_test')
   elif FLAGS.dataset == 'omniglot':
     import h5py
-    # file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'binary/' 'binary_omniglot.hdf5')
     file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'omniglot.hdf5')
     print(file_path)
     if not os.path.exists(file_path):
@@ -220,7 +196,7 @@ def main(unused_argv):
     convert_to(test_dataset, 'svhn_test')
   elif FLAGS.dataset == 'celebA':
     import h5py
-    file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'REAL_gender_celeba_aligned_cropped.hdf5')
+    file_path = os.path.join(FLAGS.directory, FLAGS.dataset, 'celeba_aligned_cropped.hdf5')
     if not os.path.exists(file_path):
       raise ValueError('need: ', file_path)
     f = h5py.File(file_path, 'r')
@@ -243,9 +219,9 @@ def main(unused_argv):
     valid_dataset = SimpleNamespace(images= validimages, labels= validlabels)
     test_dataset = SimpleNamespace(images= testimages, labels= testlabels)
 
-    convert_to(train_dataset, 'gender_celebA_train')
-    convert_to(valid_dataset, 'gender_celebA_valid')
-    convert_to(test_dataset, 'gender_celebA_test')
+    convert_to(train_dataset, 'celebA_train')
+    convert_to(valid_dataset, 'celebA_valid')
+    convert_to(test_dataset, 'celebA_test')
   else:
     raise NotImplementedError
 
@@ -256,12 +232,12 @@ if __name__ == '__main__':
       '--dataset',
       type=str,
       default='omniglot',
-      help='Dataset (mnist/omniglot/BinaryMNIST/stitched_mnist/random/svhn/celebA)'
+      help='Dataset (mnist/omniglot/BinaryMNIST/random/svhn/celebA)'
   )
   parser.add_argument(
       '--directory',
       type=str,
-      default='../datasets',
+      default='./data/',
       help='Directory to download data files and write the converted result'
   )
   parser.add_argument(

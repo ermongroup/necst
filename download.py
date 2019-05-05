@@ -90,7 +90,7 @@ def download_binary_mnist(dirpath):
     filename = 'binarized_mnist_{}.amat'.format(subdataset)
     url = 'http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_{}.amat'.format(subdataset)
     local_filename = os.path.join(dirpath, "BinaryMNIST", filename)
-    urllib.urlretrieve(url, local_filename)
+    urllib.request.urlretrieve(url, local_filename)
 
 def prepare_data_dir(path = './data'):
   if not os.path.exists(path):

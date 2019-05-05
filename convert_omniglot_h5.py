@@ -2,14 +2,10 @@ import os
 import h5py
 import numpy as np
 from scipy.io import loadmat
-from fuel.converters.base import progress_bar
 
-IMAGE_FILE = '/atlas/u/kechoi/csgm-private/datasets/omniglot/chardata.mat'
 NUM_EXAMPLES = 32415
 TRAIN_STOP =  23845
 VALID_STOP = 24345
-# OUTPUT_FILENAME = '/atlas/u/kechoi/csgm-private/datasets/omniglot/omniglot.hdf5'
-OUTPUT_FILENAME = '/atlas/u/kechoi/csgm-private/datasets/omniglot/binary/binary_omniglot.hdf5'
 
 
 def prepare_h5(output_path):
@@ -44,50 +40,44 @@ def prepare_h5(output_path):
 	return h5file
 
 
-def convert_omniglot(output_directory, output_filename='omniglot.hdf5'):
+def convert_omniglot(image_file, output_directory, output_filename='omniglot.hdf5'):
 
-	# output_path = os.path.join(output_directory, output_filename)
-	output_path = os.path.join(output_directory, 'binary_omniglot.hdf5')
+	output_path = os.path.join(output_directory, output_filename)
 	print(output_path)
 	h5file = prepare_h5(output_path)
 
 	# load data
-	fpath = os.path.join(output_directory, IMAGE_FILE)
-	data = loadmat(fpath)
+	data = loadmat(image_file)
 
 	# begin partitioning
-	with progress_bar('images', NUM_EXAMPLES) as bar:
-		# training set
-		features_dataset = h5file['train']
-		targets_dataset = h5file['trainlabels']
-		more_targets_dataset = h5file['trainlabels2']
-		for i in np.arange(0, TRAIN_STOP):
-			# casting for train, valid, and test to save memory
-			features_dataset[i] = np.round(np.reshape(data['data'].T[i], (1, 1, 28, 28)))
-			# features_dataset[i] = np.reshape(data['data'].T[i], (1, 1, 28, 28))
-			targets_dataset[i] = data['target'].T[i]
-			more_targets_dataset[i] = data['targetchar'].T[i]
-			bar.update(i + 1)
-		# validation set
-		valid_features_dataset = h5file['valid']
-		valid_targets_dataset = h5file['validlabels']
-		valid_more_targets_dataset = h5file['validlabels2']
-		for i in np.arange(0, VALID_STOP-TRAIN_STOP):
-			valid_features_dataset[i] = np.round(np.reshape(data['data'].T[i], (1, 1, 28, 28)))
-			# valid_features_dataset[i] = np.reshape(data['data'].T[i], (1, 1, 28, 28))
-			valid_targets_dataset[i] = data['target'].T[i]
-			valid_more_targets_dataset[i] = data['targetchar'].T[i]
-			bar.update((i + TRAIN_STOP) + 1)
-		# test set
-		test_features_dataset = h5file['test']
-		test_targets_dataset = h5file['testlabels']
-		test_more_targets_dataset = h5file['testlabels2']
-		for i in np.arange(0, NUM_EXAMPLES-VALID_STOP):
-			test_features_dataset[i] = np.round(np.reshape(data['testdata'].T[i], (1, 1, 28, 28)))
-			# test_features_dataset[i] = np.reshape(data['testdata'].T[i], (1, 1, 28, 28))
-			test_targets_dataset[i] = data['testtarget'].T[i]
-			test_more_targets_dataset[i] = data['testtargetchar'].T[i]
-			bar.update((i + VALID_STOP) + 1)
+	# training set
+	features_dataset = h5file['train']
+	targets_dataset = h5file['trainlabels']
+	more_targets_dataset = h5file['trainlabels2']
+	for i in np.arange(0, TRAIN_STOP):
+		# casting for train, valid, and test to save memory
+		features_dataset[i] = np.round(np.reshape(data['data'].T[i], (1, 1, 28, 28)))
+		# features_dataset[i] = np.reshape(data['data'].T[i], (1, 1, 28, 28))
+		targets_dataset[i] = data['target'].T[i]
+		more_targets_dataset[i] = data['targetchar'].T[i]
+	# validation set
+	valid_features_dataset = h5file['valid']
+	valid_targets_dataset = h5file['validlabels']
+	valid_more_targets_dataset = h5file['validlabels2']
+	for i in np.arange(0, VALID_STOP-TRAIN_STOP):
+		valid_features_dataset[i] = np.round(np.reshape(data['data'].T[i], (1, 1, 28, 28)))
+		# valid_features_dataset[i] = np.reshape(data['data'].T[i], (1, 1, 28, 28))
+		valid_targets_dataset[i] = data['target'].T[i]
+		valid_more_targets_dataset[i] = data['targetchar'].T[i]
+	# test set
+	test_features_dataset = h5file['test']
+	test_targets_dataset = h5file['testlabels']
+	test_more_targets_dataset = h5file['testlabels2']
+	for i in np.arange(0, NUM_EXAMPLES-VALID_STOP):
+		test_features_dataset[i] = np.round(np.reshape(data['testdata'].T[i], (1, 1, 28, 28)))
+		# test_features_dataset[i] = np.reshape(data['testdata'].T[i], (1, 1, 28, 28))
+		test_targets_dataset[i] = data['testtarget'].T[i]
+		test_more_targets_dataset[i] = data['testtargetchar'].T[i]
 	# write to record file
 	h5file.flush()
 	h5file.close()
@@ -95,10 +85,19 @@ def convert_omniglot(output_directory, output_filename='omniglot.hdf5'):
 	return (output_path,)
 
 
-def main():
-    # TODO: you'll probably want to make that a command-line argument
-    convert_omniglot('/atlas/u/kechoi/csgm-private/datasets/omniglot/')
+def main(args):
+	# TODO: you'll probably want to make that a command-line argument
+	convert_omniglot(args.image_file, args.out_dir)
 
 
 if __name__ == '__main__':
-    main()
+	import argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument('image_file', type=str, help='path to omniglot chardata.mat')
+	parser.add_argument('out_dir', type=str, help='where to save outputs')
+	args = parser.parse_args()
+
+	if not os.path.isdir(args.out_dir):
+		os.makedirs(args.out_dir)
+
+	main(args)

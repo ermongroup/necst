@@ -1,4 +1,4 @@
-# NOTE: code mostly from aditya-grover's UAE project
+# starter code from: https://github.com/aditya-grover/uae
 import numpy as np 
 import tensorflow as tf 
 from utils import *
