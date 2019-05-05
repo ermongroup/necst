@@ -19,9 +19,9 @@ import subprocess
 from six.moves import urllib
 
 
-parser = argparse.ArgumentParser(description='Download dataset for DCGAN.')
-parser.add_argument('datasets', metavar='N', type=str, nargs='+', choices=['celebA', 'lsun', 'mnist'],
-           help='name of dataset to download [celebA, lsun, mnist]')
+parser = argparse.ArgumentParser(description='Download dataset for NECST.')
+parser.add_argument('datasets', metavar='N', type=str, nargs='+', choices=['mnist', 'BinaryMNIST'],
+           help='name of dataset to download [mnist, BinaryMNIST]')
 
 def download(url, dirpath):
   filename = url.split('/')[-1]
@@ -56,57 +56,6 @@ def unzip(filepath):
   with zipfile.ZipFile(filepath) as zf:
     zf.extractall(dirpath)
   os.remove(filepath)
-
-def download_celeb_a(dirpath):
-  data_dir = 'celebA'
-  if os.path.exists(os.path.join(dirpath, data_dir)):
-    print('Found Celeb-A - skip')
-    return
-  # url = 'https://www.dropbox.com/sh/8oqt9vytwxb3s4r/AADIKlz8PR9zr6Y20qbkunrba/Img/img_align_celeba.zip?dl=1&pv=1'
-  # dropbox url not working anymore, switching to google drive link
-  url = 'https://drive.google.com/drive/folders/0B7EVK8r0v71pWEZsZE9oNnFzTm8'
-  filepath = download(url, dirpath)
-  zip_dir = ''
-  with zipfile.ZipFile(filepath) as zf:
-    zip_dir = zf.namelist()[0]
-    zf.extractall(dirpath)
-  os.remove(filepath)
-  os.rename(os.path.join(dirpath, zip_dir), os.path.join(dirpath, data_dir))
-
-def _list_categories(tag):
-  url = 'http://lsun.cs.princeton.edu/htbin/list.cgi?tag=' + tag
-  f = urllib.request.urlopen(url)
-  return json.loads(f.read())
-
-def _download_lsun(out_dir, category, set_name, tag):
-  url = 'http://lsun.cs.princeton.edu/htbin/download.cgi?tag={tag}' \
-      '&category={category}&set={set_name}'.format(**locals())
-  print(url)
-  if set_name == 'test':
-    out_name = 'test_lmdb.zip'
-  else:
-    out_name = '{category}_{set_name}_lmdb.zip'.format(**locals())
-  out_path = os.path.join(out_dir, out_name)
-  cmd = ['curl', url, '-o', out_path]
-  print('Downloading', category, set_name, 'set')
-  subprocess.call(cmd)
-
-def download_lsun(dirpath):
-  data_dir = os.path.join(dirpath, 'lsun')
-  if os.path.exists(data_dir):
-    print('Found LSUN - skip')
-    return
-  else:
-    os.mkdir(data_dir)
-
-  tag = 'latest'
-  #categories = _list_categories(tag)
-  categories = ['bedroom']
-
-  for category in categories:
-    _download_lsun(data_dir, category, 'train', tag)
-    _download_lsun(data_dir, category, 'val', tag)
-  _download_lsun(data_dir, '', 'test', tag)
 
 def download_mnist(dirpath):
   data_dir = os.path.join(dirpath, 'mnist')
@@ -152,10 +101,6 @@ if __name__ == '__main__':
   args = parser.parse_args()
   prepare_data_dir()
 
-  if 'celebA' in args.datasets:
-    download_celeb_a('./data')
-  if 'lsun' in args.datasets:
-    download_lsun('./data')
   if 'mnist' in args.datasets:
     download_mnist('./data')
   if 'BinaryMNIST' in args.datasets:

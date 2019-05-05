@@ -11,7 +11,7 @@ from tensorflow.python.platform import flags
 FLAGS = flags.FLAGS
 
 # File options
-flags.DEFINE_string('datadir', '../datasets/', 'directory for datasets')
+flags.DEFINE_string('datadir', './data/', 'directory for datasets')
 flags.DEFINE_string('datasource', 'mnist', 'mnist/BinaryMNIST/random/omniglot/binary_omniglot/celebA/svhn/cifar10')
 flags.DEFINE_string('logdir', './models/', 'directory to save checkpoints, events files')
 flags.DEFINE_string('outdir', './results/', 'directory to save samples, final results')
@@ -84,7 +84,6 @@ def main():
 	Runs the ML loop. Preprocesses data, trains model, along with regular validation and testing.
 	"""	
 	os.environ['CUDA_VISIBLE_DEVICES'] = str(FLAGS.gpu_id)
-	os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 	subpath = 'noise_' + str(FLAGS.noise_std) 
 	FLAGS.logdir = os.path.join(FLAGS.logdir, FLAGS.datasource, subpath, FLAGS.exp_id)
 	FLAGS.outdir = os.path.join(FLAGS.outdir, FLAGS.datasource, subpath, FLAGS.exp_id)

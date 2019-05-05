@@ -49,21 +49,7 @@ class Datasource(object):
 			self.num_classes = 10
 			self.dtype = tf.float32
 			self.preprocess = self._preprocess_binary_mnist
-			self.get_dataset = self.get_binary_tf_dataset
-
-		elif FLAGS.datasource == 'stitched_mnist':
-
-			# stitch together 10 digits to get larger N
-			self.target_dataset = 'stitched_mnist'
-			self.TRAIN_FILE = 'five_stitched_mnist_train.tfrecords'
-			self.VALID_FILE = 'five_stitched_mnist_valid.tfrecords'
-			self.TEST_FILE = 'five_stitched_mnist_test.tfrecords'
-
-			self.input_dim = 3920
-			self.num_classes = 10
-			self.dtype = tf.float32
-			self.preprocess = self._preprocess_stitched_mnist
-			self.get_dataset = self.get_binary_tf_dataset			
+			self.get_dataset = self.get_binary_tf_dataset		
 
 		elif FLAGS.datasource == 'random':
 
@@ -80,8 +66,7 @@ class Datasource(object):
 			self.preprocess = self._preprocess_binary_mnist
 			self.get_dataset = self.get_binary_tf_dataset
 
-		# TODO
-		elif FLAGS.datasource == 'omniglot' or FLAGS.datasource == 'mnist2omniglot':
+		elif FLAGS.datasource == 'omniglot':
 
 			self.target_dataset = 'omniglot'
 			self.TRAIN_FILE = 'omniglot_train.tfrecords'
@@ -154,12 +139,7 @@ class Datasource(object):
 			self.input_channels = 3
 			self.dtype = tf.float32
 			self.preprocess = self._preprocess_celebA
-			# self.get_dataset = self.get_tf_dataset_celebA
-			# TODO: can use the version with labels bc testing with gender
-			self.get_dataset = self.get_tf_dataset
-			# self.get_dataset = self.get_binary_tf_dataset
-			# self._test_celebA()
-		
+			self.get_dataset = self.get_tf_dataset_celebA
 		else:
 			raise NotImplementedError
 
@@ -195,13 +175,6 @@ class Datasource(object):
 		image.set_shape([self.input_dim])
 		# labels not available for BinaryMNIST
 
-		return image
-
-	def _preprocess_stitched_mnist(self, parsed_example):
-
-		image = tf.decode_raw(parsed_example['features'], tf.uint8)
-		image.set_shape([self.input_dim])
-		image = tf.cast(image, tf.float32) * (1. / 255)
 		return image
 
 	def _preprocess_svhn(self, parsed_example):
