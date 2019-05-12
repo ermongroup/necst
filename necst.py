@@ -40,13 +40,11 @@ class NECST():
 			self.img_dim = 28
 		elif self.input_dim == (32 * 32 * 3):
 			self.img_dim = 32
-		else:
-			# celebA
+		else:  # celebA
 			self.img_dim = 64
-		self.z_dim = FLAGS.num_measurements
+		self.z_dim = FLAGS.n_bits
 		self.dec_layers = [self.input_dim] + FLAGS.dec_arch
 		self.enc_layers = FLAGS.enc_arch + [self.z_dim]
-		self.transfer = FLAGS.transfer
 
 		self.last_layer_act = tf.nn.sigmoid if FLAGS.non_linear_act else None
 
@@ -56,6 +54,7 @@ class NECST():
 		# for vimco
 		self.is_binary = FLAGS.is_binary
 		self.vimco_samples = FLAGS.vimco_samples
+		self.discrete_relax = FLAGS.discrete_relax
 
 		# other params
 		self.activation = FLAGS.activation
@@ -76,30 +75,29 @@ class NECST():
 
 		# TODO: hacky - fix later
 		if self.img_dim == 64:
-			self.x = tf.placeholder(self.datasource.dtype, shape=[None, self.img_dim, self.img_dim, 3], name='vae_input')
+			self.x = tf.placeholder(self.datasource.dtype, shape=[None, self.img_dim, self.img_dim, 3], name='necst_input')
 		elif self.img_dim == 28:
-			self.x = tf.placeholder(tf.float32, shape=[None, self.input_dim], name='vae_input')
+			self.x = tf.placeholder(tf.float32, shape=[None, self.input_dim], name='necst_input')
 		else:
 			# svhn and cifar10
-			self.x = tf.placeholder(tf.float32, shape=[None, self.img_dim, self.img_dim, 3], name='vae_input')
+			self.x = tf.placeholder(tf.float32, shape=[None, self.img_dim, self.img_dim, 3], name='necst_input')
 
 		# CS settings
-		self.noise_std = tf.placeholder_with_default(FLAGS.noise_std, shape=(), name='noise_std')
 		self.reg_param = tf.placeholder_with_default(FLAGS.reg_param, shape=(), name='reg_param')
 
 		# gumbel-softmax and vimco-compatible; only discrete bits
 		if self.img_dim == 64:
-			self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.celebA_create_collapsed_computation_graph(self.x, std=self.noise_std)
+			self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.celebA_create_collapsed_computation_graph(self.x)
 		else:
 			# MNIST
 			if self.channel_model == 'bsc':
-				self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.create_collapsed_computation_graph(self.x, std=self.noise_std)
+				self.mean, self.z, self.classif_z, self.q, self.x_reconstr_logits = self.create_collapsed_computation_graph(self.x)
 			else:
-				self.mean, self.z, self.q, self.x_reconstr_logits = self.create_erasure_collapsed_computation_graph(self.x, std=self.noise_std)
+				self.mean, self.z, self.q, self.x_reconstr_logits = self.create_erasure_collapsed_computation_graph(self.x)
 		if self.channel_model == 'bsc':
-			self.test_mean, self.test_z, self.test_classif_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_stochastic_test_sample(self.x, std=self.noise_std)
+			self.test_mean, self.test_z, self.test_classif_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_stochastic_test_sample(self.x)
 		else:
-			self.test_mean, self.test_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_erasure_stochastic_test_sample(self.x, std=self.noise_std)
+			self.test_mean, self.test_z, self.test_q, self.test_x_reconstr_logits = self.get_collapsed_erasure_stochastic_test_sample(self.x)
 		if not self.discrete_relax:
 			print('using vimco loss...')
 			if self.noisy_mnist:
@@ -137,9 +135,9 @@ class NECST():
 			self.discrete_train_op2 = self.phi_optimizer.minimize(self.phi_loss, global_step=self.global_step, var_list=phi_vars)
 		else:
 			# gumbel-softmax
+			train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 			self.train_op = self.optimizer(learning_rate=self.lr).minimize(self.loss, 
 				global_step=self.global_step, var_list=train_vars)
-		self.vars = train_vars
 
 		# summary ops
 		self.summary_op = tf.summary.merge_all()
@@ -163,25 +161,9 @@ class NECST():
 				if self.channel_model == 'bsc':
 					z_mean = tf.layers.dense(e, self.z_dim, activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-'+str(len(enc_layers)-1))
 				else:
-					# N x D x 2 for erasure channel!
+					# N x D x 2 for erasure channel
 					z_mean = tf.layers.dense(e, self.z_dim * 2, activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-'+str(len(enc_layers)-1))
 					z_mean = tf.reshape(z_mean, (-1, self.z_dim, 2))
-		return z_mean
-
-
-	def categorical_encoder(self, x, reuse=True):
-		"""
-		Specifies the parameters for the mean and variance of p(y|x)
-		"""
-		e = x
-		enc_layers = self.enc_layers
-		regularizer = tf.contrib.layers.l2_regularizer(scale=self.reg_param)
-		with tf.variable_scope('model', reuse=reuse):
-			with tf.variable_scope('encoder', reuse=reuse):
-				for layer_idx, layer_dim in enumerate(enc_layers[:-1]):
-					e = tf.layers.dense(e, layer_dim, activation=tf.nn.elu, kernel_regularizer=regularizer, reuse=reuse, name='fc-'+str(layer_idx))
-				# temporarily switch this to a categorical!
-				z_mean = tf.layers.dense(e, self.z_dim, activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-'+str(len(enc_layers)-1))
 		return z_mean
 
 
@@ -434,9 +416,8 @@ class NECST():
 					deconv5 = tf.layers.conv2d_transpose(deconv4, 3, 4, strides=(2,2), padding="SAME", activation=tf.nn.sigmoid, reuse=reuse, name='deconv5')
 					return deconv5
 				else:
-					# train
+					# train; iterate through one vimco sample at a time
 					for i in range(self.vimco_samples):
-						# iterate through one vimco sample at a time
 						z_sample = z[i]
 						d = tf.layers.dense(z_sample, 256, activation=tf.nn.elu, use_bias=False, reuse=reuse, name='fc1')		
 						d = tf.reshape(d, (-1, 1, 1, 256))
@@ -462,8 +443,10 @@ class NECST():
 			with tf.variable_scope('decoder', reuse=reuse):
 				for layer_idx, layer_dim in list(reversed(list(enumerate(dec_layers))))[:-1]:
 					d = tf.layers.dense(d, layer_dim, activation=tf.nn.leaky_relu, reuse=reuse, name='fc-' + str(layer_idx), use_bias=use_bias)
-				# assume gaussian decoder
-				x_reconstr_logits = tf.layers.dense(d, dec_layers[0], activation=self.last_layer_act, reuse=reuse, name='fc-0', use_bias=use_bias) # clip values between 0 and 1
+				if self.is_binary:  # directly return logits
+					x_reconstr_logits = tf.layers.dense(d, dec_layers[0], activation=None, reuse=reuse, name='fc-0', use_bias=use_bias)
+				else:  # gaussian decoder
+					x_reconstr_logits = tf.layers.dense(d, dec_layers[0], activation=self.last_layer_act, reuse=reuse, name='fc-0', use_bias=use_bias) # clip values between 0 and 1
 
 		return x_reconstr_logits
 
@@ -471,14 +454,18 @@ class NECST():
 	def get_loss(self, x, x_reconstr_logits):
 
 		reg_loss = tf.losses.get_regularization_loss()
-		if self.img_dim == 64:
-			reconstr_loss = tf.reduce_mean(
-				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[1,2,3]))
+		if self.is_binary:
+			# TODO: DOUBLE CHECK THIS
+			x = tf.expand_dims(x, axis=0)
+			x = tf.tile(x, [self.vimco_samples, 1, 1])
+			reconstr_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=x_reconstr_logits, labels=x))
 		else:
-			reconstr_loss = tf.reduce_mean(
-				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
-			# TODO: binary MNIST
-			# reconstr_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+			if self.img_dim == 64:
+				reconstr_loss = tf.reduce_mean(
+					tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[1,2,3]))
+			else:
+				reconstr_loss = tf.reduce_mean(
+					tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
 		tf.summary.scalar('reconstruction loss', reconstr_loss)
 		total_loss = reconstr_loss + reg_loss
 		
@@ -493,7 +480,7 @@ class NECST():
 	    log_q_h: Sum of log q(h^l) over layers
 	    Returns:
 	    baseline to subtract from l
-	    ---> implementation from: https://github.com/altosaar/vimco_tf
+	    - implementation from: https://github.com/altosaar/vimco_tf
 	    """
 	    # compute the multi-sample stochastic bound
 	    k, b = l.get_shape().as_list()
@@ -530,16 +517,18 @@ class NECST():
 	def vimco_loss(self, x, x_reconstr_logits):
 		
 		reg_loss = tf.losses.get_regularization_loss()
-		if self.is_binary:
-			print('using Gaussian decoder and rounding to get hard {0, 1} values')
-		if self.img_dim == 64:
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
-		elif self.img_dim == 32 and self.datasource.target_dataset == 'cifar10':
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
-		elif self.img_dim == 32 and self.datasource.target_dataset == 'svhn':
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
+		if self.is_binary:  # match dimensions with vimco samples
+			x = tf.expand_dims(x, axis=0)
+			x = tf.tile(x, [self.vimco_samples, 1, 1])
+			reconstr_loss = tf.reduce_sum(
+				tf.nn.sigmoid_cross_entropy_with_logits(logits=x_reconstr_logits, labels=x), axis=-1)
 		else:
-			reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=-1)
+			if self.img_dim == 64:
+				reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
+			elif self.img_dim == 32 and self.datasource.target_dataset in ['cifar10', 'svhn']:
+				reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
+			else:
+				reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=-1)
 		print('reconstr loss shape: {}'.format(reconstr_loss.get_shape()))
 
 		# define your distribution q as a bernoulli, get multiple samples for VIMCO
@@ -570,38 +559,36 @@ class NECST():
 
 	def get_test_loss(self, x, x_reconstr_logits):
 
-		print('in function get_test_loss()')
 		# reconstruction loss only, no regularization 
 		if self.is_binary:
-			print('self.is_binary is True; using Gaussian decoder')
-		if self.img_dim == 64 or self.img_dim == 32:
 			reconstr_loss = tf.reduce_mean(
-				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[1,2,3]))
+				tf.nn.sigmoid_cross_entropy_with_logits(logits=x_reconstr_logits, labels=x))
 		else:
-			reconstr_loss = tf.reduce_mean(
-				tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
+			if self.img_dim == 64 or self.img_dim == 32:  # RGB
+				reconstr_loss = tf.reduce_mean(
+					tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[1,2,3]))
+			else:  # grayscale
+				reconstr_loss = tf.reduce_mean(
+					tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=1))
 
 		return reconstr_loss
 
 
-	def create_collapsed_computation_graph(self, x, std=0.1, reuse=False):
+	def create_collapsed_computation_graph(self, x, reuse=False):
 		"""
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
 		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
 		dset_name = self.datasource.target_dataset
-		if dset_name == 'mnist':
-			mean = self.encoder(x, reuse=reuse)
-		elif dset_name == 'omniglot':
-			# mean = self.convolutional_32_encoder(x, reuse=reuse)
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=reuse)
 		elif dset_name == 'cifar10':
+			mean = self.cifar10_convolutional_encoder(x, reuse=reuse)
+		elif dset_name == 'svhn':
 			mean = self.convolutional_32_encoder(x, reuse=reuse)
 		elif dset_name == 'celebA':
 			mean = self.complex_encoder(x, reuse=reuse)
-		elif dset_name == 'svhn':
-			mean = self.convolutional_32_encoder(x, reuse=reuse)
 		else:
 			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
@@ -622,41 +609,38 @@ class NECST():
 
 		# use VIMCO if self.vimco_samples > 1, else just one sample
 		y = tf.cast(q.sample(self.vimco_samples), tf.float32)
-		if dset_name == 'mnist':
-			x_reconstr_logits = self.decoder(y, reuse=reuse)
-		elif dset_name == 'omniglot':
-			# x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			x_reconstr_logits = self.decoder(y, reuse=reuse)
 		elif dset_name == 'cifar10':
+			x_reconstr_logits = self.cifar10_convolutional_decoder(y, reuse=reuse)
+		elif dset_name == 'svhn':
 			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
 		elif dset_name == 'celebA':
 			x_reconstr_logits = self.complex_decoder(y, reuse=reuse)
-		elif dset_name == 'svhn':
-			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
 		else:
 			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
 
-		# return mean, y, total_prob, q, x_reconstr_logits
 		return total_prob, y, classif_y, q, x_reconstr_logits
 
 
-	def create_erasure_collapsed_computation_graph(self, x, std=0.1, reuse=False):
+	def create_erasure_collapsed_computation_graph(self, x, reuse=False):
 		"""
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
-		print('in create_collapsed_computation_graph() for ERASURE channel!!')
-		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
+		print('TRAIN: implicitly erasing individual bits with probability {}'.format(self.perturb_probs))
 		dset_name = self.datasource.target_dataset
-		if dset_name == 'mnist' or dset_name == 'BinaryMNIST':
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=reuse)
-		elif dset_name == 'omniglot':
-			mean = self.convolutional_32_encoder(x, reuse=reuse)
 		elif dset_name == 'cifar10':
 			mean = self.cifar10_convolutional_encoder(x, reuse=reuse)
+		elif dset_name == 'svhn':
+			mean = self.convolutional_32_encoder(x, reuse=reuse)
+		elif dset_name == 'celeba':
+			mean = self.complex_encoder(x, reuse=reuse)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not implemented!'.format(dset_name))
 			raise NotImplementedError
 		
 		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
@@ -682,22 +666,23 @@ class NECST():
 
 		# use VIMCO if self.vimco_samples > 1, else just one sample
 		y = tf.cast(q.sample(self.vimco_samples), tf.float32)
-		if dset_name == 'mnist' or dset_name == 'BinaryMNIST':
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			x_reconstr_logits = self.decoder(y, reuse=reuse)
-		elif dset_name == 'omniglot':
-			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
 		elif dset_name == 'cifar10':
 			x_reconstr_logits = self.cifar10_convolutional_decoder(y, reuse=reuse)
+		elif dset_name == 'svhn':
+			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=reuse)
+		elif dset_name == 'celeba':
+			x_reconstr_logits = self.complex_decoder(y, reuse=reuse)
 		else:
 			print('dataset {} is not implemented'.format(dset_name))
 			raise NotImplementedError
 
 		return mean, y, q, x_reconstr_logits
-		# return total_prob, y, classif_y, q, x_reconstr_logits
 
 
 	# TODO: vanilla beta-VAE for celebA
-	def celebA_create_collapsed_computation_graph(self, x, std=0.1, reuse=False):
+	def celebA_create_collapsed_computation_graph(self, x, reuse=False):
 		"""
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
@@ -723,25 +708,22 @@ class NECST():
 		return mean, y, classif_y, q, x_reconstr_logits
 
 
-	def get_collapsed_stochastic_test_sample(self, x, std=0.1, reuse=False):
+	def get_collapsed_stochastic_test_sample(self, x, reuse=False):
 		"""
 		use collapsed Bernoulli at test time as well
 		"""
 		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_perturb_probs))
 		dset_name = self.datasource.target_dataset
-		if dset_name == 'mnist':
-			mean = self.encoder(x, reuse=tf.AUTO_REUSE)
-		elif dset_name == 'omniglot':
-			# mean = self.convolutional_32_encoder(x, reuse=tf.AUTO_REUSE)
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'cifar10':
-			mean = self.convolutional_32_encoder(x, reuse=tf.AUTO_REUSE)
+			mean = self.cifar10_convolutional_encoder(x, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'svhn':
 			mean = self.convolutional_32_encoder(x, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'celebA':
 			mean = self.complex_encoder(x, reuse=tf.AUTO_REUSE)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not supported!'.format(dset_name))
 			raise NotImplementedError
 
 		# for downstream classification
@@ -759,45 +741,38 @@ class NECST():
 			q = Bernoulli(logits=mean)
 
 		y = tf.cast(q.sample(), tf.float32)
-		if dset_name == 'mnist':
-			x_reconstr_logits = self.decoder(y, reuse=tf.AUTO_REUSE)
-		elif dset_name == 'omniglot':
-			# x_reconstr_logits = self.convolutional_32_decoder(y, reuse=tf.AUTO_REUSE)
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			x_reconstr_logits = self.decoder(y, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'cifar10':
-			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=tf.AUTO_REUSE)
+			x_reconstr_logits = self.cifar10_convolutional_decoder(y, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'svhn':
 			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'celebA':
 			x_reconstr_logits = self.complex_decoder(y, reuse=tf.AUTO_REUSE)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not supported!'.format(dset_name))
 			raise NotImplementedError
 
 		return total_prob, y, classif_y, q, x_reconstr_logits
 
 
-	def get_collapsed_erasure_stochastic_test_sample(self, x, std=0.1, reuse=False):
+	def get_collapsed_erasure_stochastic_test_sample(self, x, reuse=False):
 		"""
 		use collapsed Bernoulli at test time as well
 		"""
 		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_perturb_probs))
 		dset_name = self.datasource.target_dataset
-		if dset_name == 'mnist' or dset_name == 'BinaryMNIST':
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=tf.AUTO_REUSE)
-		elif dset_name == 'omniglot':
-			mean = self.convolutional_32_encoder(x, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'cifar10':
 			mean = self.cifar10_convolutional_encoder(x, reuse=tf.AUTO_REUSE)
+		elif dset_name == 'svhn':
+			mean = self.convolutional_32_encoder(x, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'celebA':
 			mean = self.complex_encoder(x, reuse=tf.AUTO_REUSE)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not supported!'.format(dset_name))
 			raise NotImplementedError
-
-		# for downstream classification
-		# classif_q = Bernoulli(logits=mean)
-		# classif_y = tf.cast(classif_q.sample(), tf.float32)
 
 		# test BEC
 		if self.perturb_probs != 0:
@@ -820,23 +795,21 @@ class NECST():
 			raise NotImplementedError
 
 		y = tf.cast(q.sample(), tf.float32)
-		print('test y shape: {}'.format(y.get_shape()))
 
 		# decoder
-		if dset_name == 'mnist' or dset_name == 'BinaryMNIST':
+		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			x_reconstr_logits = self.decoder(y, reuse=tf.AUTO_REUSE)
-		elif dset_name == 'omniglot':
-			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'cifar10':
 			x_reconstr_logits = self.cifar10_convolutional_decoder(y, reuse=tf.AUTO_REUSE)
+		elif dset_name == 'svhn':
+			x_reconstr_logits = self.convolutional_32_decoder(y, reuse=tf.AUTO_REUSE)
 		elif dset_name == 'celebA':
 			x_reconstr_logits = self.complex_decoder(y, reuse=tf.AUTO_REUSE)
 		else:
-			print('my dataset name is: {} and im lazy'.format(dset_name))
+			print('dataset {} is not supported!'.format(dset_name))
 			raise NotImplementedError
 
 		return total_prob, y, q, x_reconstr_logits
-		# return total_prob, y, classif_y, q, x_reconstr_logits
 
 
 	def train(self, ckpt=None, verbose=True):
@@ -851,21 +824,7 @@ class NECST():
 			if ckpt is None:
 				ckpt = tf.train.latest_checkpoint(FLAGS.logdir)
 			self.saver.restore(sess, ckpt)
-
-		elif self.transfer:
-			log_file = os.path.join(FLAGS.transfer_outdir, 'log.txt')
-			if os.path.exists(log_file):
-				for line in open(log_file):
-					if "Restoring ckpt at epoch" in line:
-						ckpt = line.split()[-1]
-						break
-			if ckpt is None:
-				ckpt = tf.train.latest_checkpoint(FLAGS.transfer_logdir)
-			self.saver.restore(sess, ckpt)
-		else:
-			sess.run(self.init_op)
-			if not self.learn_A:
-				sess.run(self.assign_A_op)
+		sess.run(self.init_op)
 
 		t0 = time.time()
 		train_dataset = datasource.get_dataset('train')
@@ -885,10 +844,8 @@ class NECST():
 		epoch_train_losses = []
 		epoch_valid_losses = []
 		epoch_save_paths = []
-		# keep track of iterations for annealing temperature
-		counter = 0  
 
-		for epoch in range(FLAGS.num_epochs):
+		for epoch in range(FLAGS.n_epochs):
 			sess.run(train_iterator.initializer)
 			sess.run(valid_iterator.initializer)
 			epoch_train_loss = 0.
@@ -896,7 +853,7 @@ class NECST():
 			while True:
 				try:
 					self.training = True
-					if not self.is_binary:
+					if (not self.is_binary) and (self.datasource.target_dataset != 'celebA'):
 						x = sess.run(next_train_batch)[0]
 					else:
 						# no labels available for binarized MNIST
@@ -932,10 +889,10 @@ class NECST():
 			if verbose:
 				epoch_train_loss /= num_batches
 				self.training = False
-				if not self.is_binary:
+				if (not self.is_binary) and (self.datasource.target_dataset != 'celebA'):
 					x = sess.run(next_valid_batch)[0]
 				else:
-					# no labels available for binarized MNIST
+					# no labels available for binarized MNIST and celebA
 					x = sess.run(next_valid_batch)
 				if self.noisy_mnist:
 					# print('training with noisy MNIST...')
@@ -945,7 +902,7 @@ class NECST():
 
 				# save run stats
 				epoch_valid_loss, valid_summary, gs = sess.run([self.test_loss, self.summary_op, self.global_step], feed_dict=feed_dict)
-				if epoch_train_loss < 0:
+				if epoch_train_loss < 0:  # note: this only applies to non-binary data since it's L2 loss
 					print('Epoch {}, (no sqrt) l2 train loss: {:0.6f}, l2 valid loss: {:0.6f}, time: {}s'. \
 				format(epoch+1, epoch_train_loss, np.sqrt(epoch_valid_loss), int(time.time()-t0)))
 				else:
@@ -987,7 +944,6 @@ class NECST():
 			try:
 				if not self.is_binary:
 					x, y = sess.run(next_test_batch)
-					labels.append(y)
 				else:
 					# no labels available for binarized MNIST
 					x = sess.run(next_test_batch)
@@ -1055,7 +1011,7 @@ class NECST():
 			feed_dict = {self.x: x}
 		# grab reconstructions
 		x_reconstr_logits = sess.run(self.test_x_reconstr_logits, feed_dict)
-		# TODO: rounding values here to get binary MNIST
+		# rounding values here to get hard {0, 1} values
 		if self.is_binary:
 			x_reconstr_logits = np.round(x_reconstr_logits)
 		print(np.max(x_reconstr_logits), np.min(x_reconstr_logits))
@@ -1100,9 +1056,8 @@ class NECST():
 		else:
 			x_t = sess.run(next_test_batch)
 
-		# random initialization with noise
+		# random initialization of 10 samples with noise
 		# print('initializing markov chain with random Gaussian noise...')
-		# just initialize 10 samples
 		# x_t = np.clip(np.random.normal(
 		# 	0., 0.01, 10 * self.input_dim).reshape(-1, self.input_dim), 0., 1.)
 		# print('initializing markov chain with random Bernoulli noise...')

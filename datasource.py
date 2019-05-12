@@ -81,7 +81,7 @@ class Datasource(object):
 
 		elif FLAGS.datasource == 'binary_omniglot':
 
-			self.target_dataset = 'omniglot'
+			self.target_dataset = 'binary_omniglot'
 			self.TRAIN_FILE = 'binary_omniglot_train.tfrecords'
 			self.VALID_FILE = 'binary_omniglot_valid.tfrecords'
 			self.TEST_FILE = 'binary_omniglot_test.tfrecords'
@@ -111,9 +111,9 @@ class Datasource(object):
 		elif FLAGS.datasource == 'cifar10':
 
 			self.target_dataset = 'cifar10'
-			self.TRAIN_FILE = 'cifar10_train.tfrecords'
-			self.VALID_FILE = 'cifar10_valid.tfrecords'
-			self.TEST_FILE = 'cifar10_test.tfrecords'
+			self.TRAIN_FILE = 'train.tfrecords'
+			self.VALID_FILE = 'validation.tfrecords'
+			self.TEST_FILE = 'eval.tfrecords'
 
 			self.input_dim = (32 * 32 * 3)
 			self.input_height = 32
@@ -128,12 +128,12 @@ class Datasource(object):
 		elif FLAGS.datasource == 'celebA':
 
 			self.target_dataset = 'celebA'
-			self.TRAIN_FILE = 'gender_celebA_train.tfrecords'
-			self.VALID_FILE = 'gender_celebA_valid.tfrecords'
-			self.TEST_FILE = 'gender_celebA_test.tfrecords'
+			self.TRAIN_FILE = 'celebA_train.tfrecords'
+			self.VALID_FILE = 'celebA_valid.tfrecords'
+			self.TEST_FILE = 'celebA_test.tfrecords'
 
 			# TODO: this is specific to the aligned+cropped (64 x 64) images
-			self.input_dim = 4096 * 3
+			self.input_dim = (64 * 64 * 3)
 			self.input_height = 64
 			self.input_width = 64
 			self.input_channels = 3
@@ -157,7 +157,6 @@ class Datasource(object):
 		# TODO: there are more labels here but i think it's fine for now
 
 		return image, label
-		# return image
 
 	def _preprocess_mnist(self, parsed_example):
 
@@ -167,7 +166,6 @@ class Datasource(object):
 		label = tf.cast(parsed_example['label'], tf.int32)
 
 		return image, label
-		# return image
 
 	def _preprocess_binary_mnist(self, parsed_example):
 
@@ -200,17 +198,14 @@ class Datasource(object):
 	def _preprocess_celebA(self, parsed_example):
 
 		image = tf.decode_raw(parsed_example['features'], tf.uint8)
+		# image = tf.decode_raw(parsed_example['image_raw'], tf.uint8)
 		image = tf.reshape(image, (self.input_height, self.input_width, self.input_channels))
-		# image.set_shape([self.input_dim])
 		# convert from bytes to data
 		image = tf.divide(tf.to_float(image), 127.5) - 1.0
 		# convert back to [0, 1] pixels
 		image = tf.clip_by_value(tf.divide(image + 1., 2.), 0., 1.)
-		# TODO: no labels for now
-		label = tf.cast(parsed_example['label'], tf.int32)
 
-		return image, label
-		# return image
+		return image
 
 	def _test_celebA(self):
 		record_iterator = tf.python_io.tf_record_iterator(path=os.path.join(FLAGS.datadir, self.target_dataset, self.TRAIN_FILE))
@@ -250,7 +245,7 @@ class Datasource(object):
 	def get_tf_dataset_celebA(self, split):
 
 		def _parse_function(example_proto):
-			example = {'image_raw': tf.FixedLenFeature((), tf.string, default_value=''),
+			example = {'features': tf.FixedLenFeature((), tf.string, default_value=''),
 						# 'height': tf.FixedLenFeature((), tf.int64, default_value=218),
 						# 'width': tf.FixedLenFeature((), tf.int64, default_value=178),
 						# 'channels': tf.FixedLenFeature((), tf.int64, default_value=3)
@@ -267,7 +262,6 @@ class Datasource(object):
 	def get_cifar10_tf_dataset(self, split):
 
 		def _parse_function(example_proto):
-			# 'features': tf.FixedLenFeature((), tf.string, default_value='')
 			example = {'image': tf.FixedLenFeature((), tf.string, default_value=''),
 						  'label': tf.FixedLenFeature((), tf.int64, default_value=0)}
 			parsed_example = tf.parse_single_example(example_proto, example)
@@ -286,9 +280,8 @@ class Datasource(object):
 						  'label': tf.FixedLenFeature((), tf.int64, default_value=0)}
 			parsed_example = tf.parse_single_example(example_proto, example)
 			preprocessed_features, preprocessed_label = self.preprocess(parsed_example)
+			
 			return preprocessed_features, preprocessed_label
-			# preprocessed_features = self.preprocess(parsed_example)
-			# return preprocessed_features
 
 		filename = os.path.join(FLAGS.datadir, self.target_dataset, self.TRAIN_FILE if split=='train' 
 			else self.VALID_FILE if split=='valid' else self.TEST_FILE)

@@ -1,4 +1,3 @@
-# lifted mostly from aditya-grover's UAE project
 import argparse
 import numpy as np
 import os
@@ -14,10 +13,10 @@ FLAGS = None
 
 
 def _int64_feature(value):
-  # TODO: for celebA, had to change value=[value] to value=value
+  # TODO: for celebA, had to change value=[value] to value=value when testing w labels
   # for mnist, you may have to change this back to normal
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-  # return tf.train.Feature(int64_list=tf.train.Int64List(value=value)
+  # return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -26,10 +25,9 @@ def _bytes_feature(value):
 def convert_to(dataset, name):
   """Converts a dataset to tfrecords."""
   images = dataset.images
-  # TODO: try this
+  # try this
   # images = images.astype(np.float32)
   # print(images.dtype)
-  labels = dataset.labels
   num_examples = images.shape[0]
 
   if images.shape[0] != num_examples:
@@ -42,7 +40,6 @@ def convert_to(dataset, name):
   for index in range(num_examples):
     image_raw = images[index].tostring()
     example = tf.train.Example(features=tf.train.Features(feature={
-        'label': _int64_feature(labels[index]),
         'features': _bytes_feature(image_raw)}))
     writer.write(example.SerializeToString())
   writer.close()
@@ -85,8 +82,9 @@ def convert_random_bits(fname, name):
 
 
 def main(unused_argv):
-  # Get the data.
-
+  """
+  obtain data
+  """
   if FLAGS.dataset == 'mnist':
     datasets = mnist.read_data_sets(FLAGS.directory,
                                      dtype=tf.uint8,
@@ -201,23 +199,18 @@ def main(unused_argv):
       raise ValueError('need: ', file_path)
     f = h5py.File(file_path, 'r')
 
-    # retrieve images/labels
+    # retrieve images
     trainimages = f['train']
     validimages = f['valid']
     testimages = f['test']
 
-    trainlabels = f['trainlabels']
-    validlabels = f['validlabels']
-    testlabels = f['testlabels']
-
     # check shapes
     print(trainimages.shape, validimages.shape, testimages.shape)
-    print(trainlabels.shape, validlabels.shape, testlabels.shape)
 
     from types import SimpleNamespace
-    train_dataset = SimpleNamespace(images= trainimages, labels= trainlabels)
-    valid_dataset = SimpleNamespace(images= validimages, labels= validlabels)
-    test_dataset = SimpleNamespace(images= testimages, labels= testlabels)
+    train_dataset = SimpleNamespace(images= trainimages)
+    valid_dataset = SimpleNamespace(images= validimages)
+    test_dataset = SimpleNamespace(images= testimages)
 
     convert_to(train_dataset, 'celebA_train')
     convert_to(valid_dataset, 'celebA_valid')

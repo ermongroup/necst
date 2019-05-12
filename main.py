@@ -1,4 +1,3 @@
-# starter code from: https://github.com/aditya-grover/uae
 import numpy as np 
 import tensorflow as tf 
 from utils import *
@@ -26,16 +25,17 @@ flags.DEFINE_bool('dump', True, 'Dumps to log.txt if True')
 
 # Probabilistic latent bit representation
 flags.DEFINE_bool('is_binary', False, 'True if dataset is binary, false otherwise.')
+flags.DEFINE_bool('discrete_relax', False, 'Use gumbel-softmax to sample codes from a RelaxedBernoulli distribution')
 flags.DEFINE_integer('vimco_samples', 5, 'number of VIMCO samples to use during training')
 
 # Noise specifications
 flags.DEFINE_bool('noisy_mnist', False, 'specify whether to train necst with noisy MNIST')
 flags.DEFINE_string('channel_model', 'bsc', 'bsc/bec')
 flags.DEFINE_float('perturb_probs', 0., 'specify proportion of entires to corrupt in z')
-flags.DEFINE_float('test_perturb_probs', 0., 'specify proportion of entries to corrupt in z AT TEST TIME.')
+flags.DEFINE_float('test_perturb_probs', 0., 'specify proportion of entries to corrupt in z at test time.')
 
 # Training options
-flags.DEFINE_integer('num_epochs', 500, 'number of training epochs')
+flags.DEFINE_integer('n_epochs', 200, 'number of training epochs')
 flags.DEFINE_integer('batch_size', 100, 'number of datapoints per batch')
 flags.DEFINE_float('lr', 0.001, 'learning rate for the model')
 flags.DEFINE_string('optimizer', 'adam', 'sgd, adam, momentum')
@@ -48,21 +48,17 @@ flags.DEFINE_string('activation', 'relu', 'sigmoid/tanh/softplus/leakyrelu/relu'
 flags.DEFINE_integer('seed', 0, 'random seed for initializing model parameters')
 flags.DEFINE_string('dec_arch', '500,500', 'comma-separated decoder architecture')
 flags.DEFINE_string('enc_arch', '500', 'comma-separated encoder architecture')
-flags.DEFINE_integer('num_measurements', 100, 'number of measurements')
-flags.DEFINE_float('noise_std', 0.1, 'std. of noise')
+flags.DEFINE_integer('n_bits', 100, 'number of measurements')
 flags.DEFINE_float('reg_param', 0.0001, 'regularization for encoder')
 flags.DEFINE_bool('non_linear_act', True, 'nonlinear activation on final layer of encoder if True')
 
-flags.DEFINE_bool('transfer', False, 'restores transfer ckpt if true')
-flags.DEFINE_string('transfer_outdir', './results/', 'directory containing log.txt for source domain')
-flags.DEFINE_string('transfer_logdir', './models/', 'directory containing ckpts for source domain')
 flags.DEFINE_integer('total_mcmc_steps', 9000, 'number of mcmc steps')
 flags.DEFINE_string('pkl_file', None, 'pkl file for reconstruction')
 
 
 def process_flags():
 	"""
-	Processes easy-to-specify cmd line FLAGS to appropriate syntax
+	processes easy-to-specify cmd line FLAGS to appropriate syntax
 	"""
 	FLAGS.optimizer = get_optimizer_fn(FLAGS.optimizer)
 	FLAGS.activation = get_activation_fn(FLAGS.activation)
@@ -81,17 +77,12 @@ def process_flags():
 
 def main():
 	"""
-	Runs the ML loop. Preprocesses data, trains model, along with regular validation and testing.
-	"""	
+	run program: preprocess data, train model, validate/test.
+	"""
 	os.environ['CUDA_VISIBLE_DEVICES'] = str(FLAGS.gpu_id)
-	subpath = 'noise_' + str(FLAGS.noise_std) 
+	subpath = 'noise_' + str(FLAGS.perturb_probs) 
 	FLAGS.logdir = os.path.join(FLAGS.logdir, FLAGS.datasource, subpath, FLAGS.exp_id)
 	FLAGS.outdir = os.path.join(FLAGS.outdir, FLAGS.datasource, subpath, FLAGS.exp_id)
-
-	if FLAGS.transfer:
-		source = FLAGS.datasource.split("2")[0]
-		FLAGS.transfer_logdir = os.path.join(FLAGS.transfer_logdir, source, subpath, FLAGS.exp_id)
-		FLAGS.transfer_outdir = os.path.join(FLAGS.transfer_outdir, source, subpath, FLAGS.exp_id)
 	
 	if not os.path.exists(FLAGS.logdir):
 		os.makedirs(FLAGS.logdir)
@@ -118,7 +109,6 @@ def main():
 	best_ckpt = FLAGS.ckpt
 	if best_ckpt is not None:
 		print('resuming ckpt supplied; restoring model from {}'.format(best_ckpt))
-	# best_ckpt = None
 	if FLAGS.train:
 		learning_curves, best_ckpt = model.train(ckpt=best_ckpt)
 	
