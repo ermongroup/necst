@@ -31,8 +31,8 @@ flags.DEFINE_integer('vimco_samples', 5, 'number of VIMCO samples to use during 
 # Noise specifications
 flags.DEFINE_bool('noisy_mnist', False, 'specify whether to train necst with noisy MNIST')
 flags.DEFINE_string('channel_model', 'bsc', 'bsc/bec')
-flags.DEFINE_float('perturb_probs', 0., 'specify proportion of entires to corrupt in z')
-flags.DEFINE_float('test_perturb_probs', 0., 'specify proportion of entries to corrupt in z at test time.')
+flags.DEFINE_float('noise', 0., 'specify proportion of entires to corrupt in z')
+flags.DEFINE_float('test_noise', 0., 'specify proportion of entries to corrupt in z at test time.')
 
 # Training options
 flags.DEFINE_integer('n_epochs', 200, 'number of training epochs')
@@ -80,7 +80,7 @@ def main():
 	run program: preprocess data, train model, validate/test.
 	"""
 	os.environ['CUDA_VISIBLE_DEVICES'] = str(FLAGS.gpu_id)
-	subpath = 'noise_' + str(FLAGS.perturb_probs) 
+	subpath = 'noise_' + str(FLAGS.noise) 
 	FLAGS.logdir = os.path.join(FLAGS.logdir, FLAGS.datasource, subpath, FLAGS.exp_id)
 	FLAGS.outdir = os.path.join(FLAGS.outdir, FLAGS.datasource, subpath, FLAGS.exp_id)
 	

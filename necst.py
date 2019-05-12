@@ -70,8 +70,8 @@ class NECST():
 
 		# noise levels
 		self.channel_model = FLAGS.channel_model
-		self.perturb_probs = FLAGS.perturb_probs
-		self.test_perturb_probs = FLAGS.test_perturb_probs
+		self.noise = FLAGS.noise
+		self.test_noise = FLAGS.test_noise
 
 		# TODO: hacky - fix later
 		if self.img_dim == 64:
@@ -195,15 +195,12 @@ class NECST():
 			with tf.variable_scope('encoder', reuse=reuse):
 				conv1 = tf.layers.conv2d(x, 128, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv1')
 				conv1 = tf.layers.batch_normalization(conv1)
-				print('conv1 shape: {}'.format(conv1.get_shape()))
 
 				conv2 = tf.layers.conv2d(conv1, 256, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv2')
 				conv2 = tf.layers.batch_normalization(conv2)
-				print('conv2 shape: {}'.format(conv2.get_shape()))
 
 				conv3 = tf.layers.conv2d(conv2, 512, 2, strides=(2,2), padding="VALID", activation=tf.nn.relu, kernel_regularizer=regularizer, reuse=reuse, name='conv3')
 				conv3 = tf.layers.batch_normalization(conv3)
-				print('conv3 shape: {}'.format(conv3.get_shape()))
 
 				flattened = tf.contrib.layers.flatten(conv3)
 				z_mean = tf.layers.dense(flattened, enc_layers[-1], activation=None, use_bias=False, kernel_regularizer=regularizer, reuse=reuse, name='fc-final')
@@ -259,7 +256,6 @@ class NECST():
 		more complex encoder architecture for images with more than 1 color channel
 		--> architecture specifically for cifar10!
 		""" 
-		# print('x shape: {}'.format(x.get_shape()))
 		enc_layers = self.enc_layers
 		regularizer = tf.contrib.layers.l2_regularizer(scale=self.reg_param)
 		with tf.variable_scope('model', reuse=reuse):
@@ -529,7 +525,6 @@ class NECST():
 				reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=[2,3,4])
 			else:
 				reconstr_loss = tf.reduce_sum(tf.squared_difference(x, x_reconstr_logits), axis=-1)
-		print('reconstr loss shape: {}'.format(reconstr_loss.get_shape()))
 
 		# define your distribution q as a bernoulli, get multiple samples for VIMCO
 		log_q_h_list = self.q.log_prob(self.z)
@@ -579,7 +574,7 @@ class NECST():
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
-		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
+		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.noise))
 		dset_name = self.datasource.target_dataset
 		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=reuse)
@@ -597,10 +592,10 @@ class NECST():
 		classif_q = Bernoulli(logits=mean)
 		classif_y = tf.cast(classif_q.sample(), tf.float32)
 		
-		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
-		if self.perturb_probs != 0:
+		# if self.noise == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
+		if self.noise != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.noise) + self.noise
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
@@ -629,7 +624,7 @@ class NECST():
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
-		print('TRAIN: implicitly erasing individual bits with probability {}'.format(self.perturb_probs))
+		print('TRAIN: implicitly erasing individual bits with probability {}'.format(self.noise))
 		dset_name = self.datasource.target_dataset
 		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=reuse)
@@ -643,8 +638,8 @@ class NECST():
 			print('dataset {} is not implemented!'.format(dset_name))
 			raise NotImplementedError
 		
-		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
-		if self.perturb_probs != 0:
+		# if self.noise == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
+		if self.noise != 0:
 			print('computing probabilities for erasure channel!')
 			# TODO
 			y_hat_prob = tf.nn.softmax(mean)
@@ -652,10 +647,10 @@ class NECST():
 
 			# construct mask for erasure channel
 			mask = np.zeros((2,3))
-			mask[0,0] = 1 - self.perturb_probs
-			mask[0,2] = self.perturb_probs
-			mask[1,1] = 1 - self.perturb_probs
-			mask[1,2] = self.perturb_probs
+			mask[0,0] = 1 - self.noise
+			mask[0,2] = self.noise
+			mask[1,1] = 1 - self.noise
+			mask[1,2] = self.noise
 
 			total_prob = tf.reshape(tf.reshape(y_hat_prob, [-1, 2]) @ mask, [-1, self.z_dim, 3])
 			total_prob = tf.clip_by_value(total_prob, 1e-7, 1.-1e-7)
@@ -687,16 +682,16 @@ class NECST():
 		this models both (Y_i|X) and N as Bernoullis,
 		so you get Y_i|X ~ Bern(sigmoid(WX) - 2*sigmoid(WX)*p + p)
 		"""
-		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.perturb_probs))
+		print('TRAIN: implicitly flipping individual bits with probability {}'.format(self.noise))
 		mean = self.complex_encoder(x, reuse=reuse)
 
 		# classif_y
 		classif_y = tf.cast(Bernoulli(logits=mean).sample(), tf.float32)
 		
-		# if self.perturb_probs == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
-		if self.perturb_probs != 0:
+		# if self.noise == 0, then you have to feed in logits for the Bernoulli to avoid NaNs
+		if self.noise != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			total_prob = y_hat_prob - (2 * y_hat_prob * self.perturb_probs) + self.perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.noise) + self.noise
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
@@ -712,7 +707,7 @@ class NECST():
 		"""
 		use collapsed Bernoulli at test time as well
 		"""
-		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_perturb_probs))
+		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_noise))
 		dset_name = self.datasource.target_dataset
 		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=tf.AUTO_REUSE)
@@ -731,9 +726,9 @@ class NECST():
 		classif_y = tf.cast(classif_q.sample(), tf.float32)
 
 		# test BSC
-		if self.perturb_probs != 0:
+		if self.noise != 0:
 			y_hat_prob = tf.nn.sigmoid(mean)
-			total_prob = y_hat_prob - (2 * y_hat_prob * self.test_perturb_probs) + self.test_perturb_probs
+			total_prob = y_hat_prob - (2 * y_hat_prob * self.test_noise) + self.test_noise
 			q = Bernoulli(probs=total_prob)
 		else:
 			print('no additional channel noise; feeding in logits for latent q_phi(z|x) to avoid numerical issues')
@@ -760,7 +755,7 @@ class NECST():
 		"""
 		use collapsed Bernoulli at test time as well
 		"""
-		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_perturb_probs))
+		print('TEST: implicitly flipping individual bits with probability {}'.format(self.test_noise))
 		dset_name = self.datasource.target_dataset
 		if dset_name in ['mnist', 'BinaryMNIST', 'omniglot', 'random']:
 			mean = self.encoder(x, reuse=tf.AUTO_REUSE)
@@ -775,17 +770,17 @@ class NECST():
 			raise NotImplementedError
 
 		# test BEC
-		if self.perturb_probs != 0:
+		if self.noise != 0:
 			print('computing probabilities for erasure channel! (test)')
 			y_hat_prob = tf.nn.softmax(mean)
 			y_hat_prob = tf.clip_by_value(y_hat_prob, 1e-7, 1.-1e-7)
 
 			# construct mask for erasure channel
 			mask = np.zeros((2,3))
-			mask[0,0] = 1 - self.test_perturb_probs
-			mask[0,2] = self.test_perturb_probs
-			mask[1,1] = 1 - self.test_perturb_probs
-			mask[1,2] = self.test_perturb_probs
+			mask[0,0] = 1 - self.test_noise
+			mask[0,2] = self.test_noise
+			mask[1,1] = 1 - self.test_noise
+			mask[1,2] = self.test_noise
 
 			total_prob = tf.reshape(tf.reshape(y_hat_prob, [-1, 2]) @ mask, [-1, self.z_dim, 3])
 			total_prob = tf.clip_by_value(total_prob, 1e-7, 1.-1e-7)
@@ -1002,7 +997,6 @@ class NECST():
 			with open(pkl_file, 'rb') as f:
 				images = pickle.load(f)
 			x = np.vstack([images[i] for i in range(10)])
-			print(x.shape)
 		# grab reconstructions
 		if self.noisy_mnist:
 			# print('training with noisy MNIST...')
