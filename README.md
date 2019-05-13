@@ -1,4 +1,4 @@
-# Neural Joint-Source Channel Coding
+# Neural Joint Source-Channel Coding
 
 This repo contains a reference implementation for NECST as described in the paper:
 > Neural Joint-Source Channel Coding </br>
