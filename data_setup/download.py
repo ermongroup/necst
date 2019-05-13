@@ -84,12 +84,19 @@ def download_binary_mnist(dirpath):
   """
   this is from yburda's iwae github repo for downloading binary MNIST
   """
-  print('Downloading binarized MNIST datasets (these do not include digit labels)...')
+  print('Downloading binarized MNIST datasets (these do not include digit labels)...') 
+  data_dir = os.path.join(dirpath, 'BinaryMNIST')
+  if os.path.exists(data_dir):
+    print('Found BinaryMNIST - skip')
+    return
+  else:
+    os.mkdir(data_dir)
+  
   subdatasets = ['train', 'valid', 'test']
   for subdataset in subdatasets:
     filename = 'binarized_mnist_{}.amat'.format(subdataset)
     url = 'http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_{}.amat'.format(subdataset)
-    local_filename = os.path.join(dirpath, "BinaryMNIST", filename)
+    local_filename = os.path.join(data_dir, filename)
     urllib.request.urlretrieve(url, local_filename)
 
 def prepare_data_dir(path = './data'):
