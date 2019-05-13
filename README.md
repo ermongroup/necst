@@ -42,8 +42,15 @@ Training the NECST model takes a set of command line arguments in the `main.py` 
 ```
 
 ## Examples
-Training a 100-bit NECST model with BSC noise = 0.1 on BinaryMNIST:
+Download and Train a 100-bit NECST model with BSC noise = 0.1 on BinaryMNIST:
 ```
+# Download the BinaryMNIST dataset
+python3 data_setup/download.py BinaryMNIST
+
+# Generate a tfrecords file corresponding to the dataset
+python3 data_setup/convert_to_records.py --dataset=BinaryMNIST
+
+# Train the model
 python3 main.py --datadir=./data --datasource=BinaryMNIST --channel_model=bsc --noise=0.1 --test_noise=0.1 --n_bits=100 --is_binary=True
 ```
 Training a 1000-bit NECST model with BSC noise = 0.2 on CelebA:

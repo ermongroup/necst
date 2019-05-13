@@ -1,2 +1,4 @@
-tensorflow>=1.8,<=1.13
+tensorflow>=1.8,<=1.13.1
 numpy
+scipy
+matplotlib
